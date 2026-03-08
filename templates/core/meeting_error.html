@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container" style="max-width: 500px; margin-top: 5rem;">
+    <div class="alert alert-danger" style="text-align: center;">
+        <h2 style="margin-bottom: 1rem; color: #ff7b72;">Meeting Unavailable</h2>
+        <p style="color: white; font-size: 1.1rem; margin-bottom: 2rem;">{{ error }}</p>
+        <a href="{% url 'dashboard' %}" class="btn btn-primary" style="text-decoration: none;">Return to Dashboard</a>
+    </div>
+</div>
+{% endblock %}

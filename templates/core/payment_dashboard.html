@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    :root {
+        --bg-color: #0d1117;
+        --card-bg: #161b22;
+        --text-main: #c9d1d9;
+        --text-muted: #8b949e;
+        --primary: #2f81f7;
+        --primary-hover: #1f6feb;
+        --success: #238636;
+        --danger: #da3633;
+        --border: #30363d;
+        --shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    body {
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+
+    .db-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    .db-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .db-header h1 {
+        font-size: 2rem;
+        font-weight: 700;
+        color: #fff;
+        margin: 0;
+    }
+
+    .db-grid {
+        display: grid;
+        grid-template-columns: 1fr 1.5fr;
+        gap: 2rem;
+    }
+
+    .db-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 1.5rem;
+        box-shadow: var(--shadow);
+        transition: transform 0.2s ease;
+    }
+
+    .db-card:hover {
+        transform: translateY(-2px);
+    }
+
+    .db-card h3 {
+        color: #fff;
+        margin-top: 0;
+        margin-bottom: 1.5rem;
+        font-size: 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .balance-huge {
+        font-size: 3rem;
+        font-weight: 800;
+        color: #fff;
+        margin: 0 0 0.5rem 0;
+        background: linear-gradient(135deg, #1f6feb 0%, #2ea043 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .pending-bal {
+        color: var(--text-muted);
+        font-size: 1rem;
+        font-weight: 500;
+        margin-bottom: 2rem;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 0.5rem;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.9rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 0.75rem 1rem;
+        background: #0d1117;
+        border: 1px solid var(--border);
+        color: #fff;
+        border-radius: 6px;
+        font-size: 1rem;
+        margin-bottom: 1rem;
+        transition: border-color 0.2s;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--primary);
+    }
+
+    .btn-pro {
+        display: inline-block;
+        width: 100%;
+        padding: 0.75rem 1.5rem;
+        background: var(--primary);
+        color: #fff;
+        font-weight: 600;
+        font-size: 1rem;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        transition: background 0.2s, transform 0.1s;
+        text-align: center;
+    }
+
+    .btn-pro:hover {
+        background: var(--primary-hover);
+    }
+
+    .btn-pro:active {
+        transform: scale(0.98);
+    }
+
+    .btn-success-pro {
+        background: var(--success);
+    }
+
+    .btn-success-pro:hover {
+        background: #2ea043;
+    }
+
+    .table-responsive {
+        overflow-x: auto;
+    }
+
+    .tx-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+    }
+
+    .tx-table th,
+    .tx-table td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .tx-table th {
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .tx-table tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+    }
+
+    .badge {
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-size: 0.75rem;
+        font-weight: bold;
+        text-transform: uppercase;
+    }
+
+    .badge-credit {
+        background: rgba(35, 134, 54, 0.15);
+        color: #3fb950;
+        border: 1px solid rgba(63, 185, 80, 0.4);
+    }
+
+    .badge-debit {
+        background: rgba(218, 54, 51, 0.1);
+        color: #ff7b72;
+        border: 1px solid rgba(255, 123, 114, 0.4);
+    }
+
+    .badge-pending {
+        background: rgba(210, 153, 34, 0.15);
+        color: #e3b341;
+        border: 1px solid rgba(227, 179, 65, 0.4);
+    }
+
+    .badge-success {
+        background: rgba(35, 134, 54, 0.15);
+        color: #3fb950;
+        border: 1px solid rgba(63, 185, 80, 0.4);
+    }
+
+    .method-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 1rem;
+        background: #0d1117;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        margin-bottom: 1rem;
+    }
+
+    .method-icon {
+        width: 40px;
+        height: 40px;
+        background: var(--border);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        color: #fff;
+    }
+
+    @media (max-width: 768px) {
+        .db-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .db-header {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 1rem;
+        }
+    }
+</style>
+
+<div class="db-container">
+    {% if message %}
+    <div
+        style="background: rgba(35,134,54,0.15); color: #3fb950; border: 1px solid rgba(63,185,80,0.4); padding: 1rem; border-radius: 8px; margin-bottom: 2rem;">
+        {{ message }}
+    </div>
+    {% endif %}
+
+    <div class="db-header">
+        <h1>Payment Hub</h1>
+        <a href="{% url 'dashboard' %}" class="btn-pro" style="width: auto; background: var(--border); color: #fff;">←
+            Back to Studio</a>
+    </div>
+
+    <div class="db-grid">
+        <!-- Left Column -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <!-- Balance Card -->
+            <div class="db-card">
+                <h3>Wallet Balance</h3>
+                <p class="balance-huge">₹{{ user.balance }}</p>
+                <div class="pending-bal">Pending Clearance: ₹{{ user.pending_balance }}</div>
+
+                <hr style="border-color: var(--border); margin: 1.5rem 0;">
+
+                {% if user.balance >= 150 %}
+                <form method="POST" action="{% url 'payment_dashboard' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="withdraw">
+                    <div class="form-group">
+                        <label>Withdraw Amount</label>
+                        <input type="number" name="withdraw_amount" class="form-control" min="150"
+                            max="{{ user.balance }}" placeholder="Enter amount (Min 150)" required>
+                    </div>
+                    <button type="submit" class="btn-pro btn-success-pro">Request Payout</button>
+                </form>
+                {% else %}
+                <div
+                    style="background: rgba(255,123,114,0.1); border: 1px solid rgba(255,123,114,0.2); border-radius: 6px; padding: 1rem; text-align: center;">
+                    <span style="color: #ff7b72; font-weight: 600; font-size: 0.9rem;">
+                        &#9888; ₹150 minimum balance required to withdraw.
+                    </span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Saved Methods -->
+            <div class="db-card">
+                <h3>Saved Methods</h3>
+                {% for method in payout_methods %}
+                <div class="method-item">
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <div class="method-icon">
+                            {% if method.method_type == 'upi' %}U{% else %}B{% endif %}
+                        </div>
+                        <div>
+                            <div style="color: #fff; font-weight: 600;">
+                                {% if method.method_type == 'upi' %}UPI Transfer{% else %}Bank Transfer{% endif %}
+                            </div>
+                            <div style="color: var(--text-muted); font-size: 0.85rem;">
+                                {% if method.method_type == 'upi' %}
+                                {{ method.upi_id }}
+                                {% else %}
+                                A/c: ****{{ method.account_number|slice:"-4:" }}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <p style="color: var(--text-muted); text-align: center; margin: 2rem 0;">No payout method found.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Right Column -->
+        <div style="display: flex; flex-direction: column; gap: 2rem;">
+            <!-- Add Payout -->
+            <div class="db-card">
+                <h3>Add New Payout Method</h3>
+                <form method="POST" action="{% url 'payment_dashboard' %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="add_payout">
+
+                    <div class="form-group">
+                        <label>Method Type</label>
+                        <select name="method_type" id="method_type" class="form-control" required
+                            style="appearance: auto; background: var(--bg-color);">
+                            <option value="upi">UPI Address</option>
+                            <option value="bank">Direct Bank Transfer</option>
+                        </select>
+                    </div>
+
+                    <div id="upi_fields">
+                        <div class="form-group">
+                            <label>Registered Name</label>
+                            <input type="text" name="upi_name" class="form-control" placeholder="John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>UPI ID (VPA)</label>
+                            <input type="text" name="upi_id" class="form-control" placeholder="username@bank">
+                        </div>
+                    </div>
+
+                    <div id="bank_fields" style="display:none;">
+                        <div class="form-group">
+                            <label>Bank Name</label>
+                            <input type="text" name="bank_name" class="form-control" placeholder="State Bank of India">
+                        </div>
+                        <div class="form-group">
+                            <label>Account Holder Name</label>
+                            <input type="text" name="account_holder_name" class="form-control" placeholder="John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label>Account Number</label>
+                            <input type="text" name="account_number" class="form-control" placeholder="XXXX XXXX XXXX">
+                        </div>
+                        <div class="form-group">
+                            <label>IFSC Code</label>
+                            <input type="text" name="ifsc_code" class="form-control" placeholder="SBIN0001234">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-pro" style="margin-top: 1rem;">Save Payment Details</button>
+                </form>
+            </div>
+
+            <!-- Transaction History -->
+            <div class="db-card">
+                <h3>Recent Transactions</h3>
+                <div class="table-responsive">
+                    <table class="tx-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for tx in transactions %}
+                            <tr>
+                                <td style="color: var(--text-muted); font-size: 0.9rem;">{{ tx.date|date:"M d, Y" }}
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge {% if tx.transaction_type == 'Credit' %}badge-credit{% else %}badge-debit{% endif %}">
+                                        {{ tx.transaction_type }}
+                                    </span>
+                                </td>
+                                <td style="color: #fff; font-weight: 600;">₹{{ tx.amount }}</td>
+                                <td>
+                                    <span
+                                        class="badge {% if tx.status == 'Success' %}badge-success{% else %}badge-pending{% endif %}">
+                                        {{ tx.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">No
+                                    transaction history available.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('method_type').addEventListener('change', function () {
+        const upi = document.getElementById('upi_fields');
+        const bank = document.getElementById('bank_fields');
+        if (this.value === 'upi') {
+            upi.style.display = 'block';
+            bank.style.display = 'none';
+        } else {
+            upi.style.display = 'none';
+            bank.style.display = 'block';
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,375 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    html,
+    body {
+        overflow: hidden;
+        /* Prevent full page from scrolling */
+        height: 100vh;
+    }
+
+    .container {
+        max-height: 100vh;
+        overflow-y: auto;
+        /* Allow the container itself to scroll minimally if needed */
+        padding: 1rem;
+        margin: 0 auto;
+    }
+</style>
+<h1 style="font-size: 1.2rem; margin-bottom: 0.5rem; margin-top: 0;">Biswas Tech Recording Room</h1>
+
+<div id="wait-section" style="{% if meeting.status == 'paired' %}display: none;{% endif %}">
+    <div class="loader"></div>
+    <h2 style="margin-top: 1rem;">Please wait...</h2>
+    <p>Waiting for another participant to join.</p>
+</div>
+
+
+<div id="paired-section" style="{% if meeting.status != 'paired' %}display: none;{% endif %}">
+
+
+    <div class="meeting-info" style="margin-bottom: 5px;">
+        <div id="email-modal"
+            style="background: #1e1e1e; padding: 1rem; border-radius: 10px; text-align: center; border: 2px solid #ffcc00; margin-bottom: 15px;">
+            <h3 style="margin-top: 0; color: white; font-size: 1.1rem;">Copy Your Email to Join</h3>
+            <p style="color: #ffcc00; font-size: 0.95rem; font-weight: bold; margin-bottom: 10px;">
+                copy kore email id ti join room e diye din
+            </p>
+            <div
+                style="background: #333; padding: 8px; border-radius: 5px; margin-bottom: 10px; display: inline-block;">
+                <span id="popup-user-email" style="font-size: 1.2rem; font-weight: bold; color: white;">
+                    {% if request.user.email == meeting.host_mail_id %}
+                    {{ meeting.studio_host_email }}
+                    {% else %}
+                    {{ meeting.studio_guest_email }}
+                    {% endif %}
+                </span>
+            </div>
+            <br>
+            <button class="btn btn-success" id="popup-copy-btn" onclick="copyEmailPopup()"
+                style="font-size: 1rem; padding: 8px 20px;">Copy Email</button>
+        </div>
+        <div style="text-align: left; margin-top: 0.5rem; display: flex; flex-direction: column; gap: 2px;">
+            {% if request.user.email == meeting.host_mail_id %}
+            <p style="font-size: 1.4rem; font-weight: bold; color: #ec4899; margin: 0; line-height: 1;">You are the
+                Host.</p>
+            {% else %}
+            <p style="font-size: 1.4rem; font-weight: bold; color: #2ea043; margin: 0; line-height: 1;">You are the
+                Guest.</p>
+            {% endif %}
+
+            <h3 id="partner-name-display"
+                style="font-size: 0.9rem; font-weight: normal; color: var(--text-muted); margin: 0; display: none;">
+                Partner: <span style="font-weight: bold; color: #c9d1d9;">Waiting...</span>
+            </h3>
+        </div>
+    </div>
+
+    <div class="recording-iframe-container">
+        <!-- Using user email inside query params could be useful, but url is already generated -->
+        <iframe src="{{ meeting.meeting_url }}" allow="microphone"></iframe>
+    </div>
+
+    <button id="get-script-btn" class="btn btn-primary" onclick="getScript()">Get Script</button>
+
+    <div id="script-header" class="blinking-warning" style="display: none; padding: 0.5rem; margin-bottom: 0.5rem;">
+        <h3 id="script-title" style="margin: 0; color: inherit;"></h3>
+    </div>
+
+    <div id="start-recording-msg" style="display: none; text-align: center; margin-bottom: 15px;">
+        <h2 style="color: #2ea043; animation: blinker 1s linear infinite;">Please start recording</h2>
+    </div>
+
+    <div id="script-section" class="script-box" style="margin-top: 0;"></div>
+
+    <div id="confirm-section" style="display: none; margin-top: 1rem; text-align: center;">
+        <button id="done-script-btn" class="btn btn-success" disabled onclick="doneScript()"
+            style="font-size: 1.2rem; min-width: 200px;">Done Script</button>
+
+        <div id="single-done-msg" style="display: none; margin-top: 20px;">
+            <h2 style="color: red; animation: blinker 1s linear infinite;">Please stop the recording</h2>
+            <p>Waiting for your partner to finish...</p>
+        </div>
+
+        <div id="both-done-msg" style="display: none; margin-top: 20px;">
+            <h2 id="stop-recording-msg" style="color: red; animation: blinker 1s linear infinite;">Please stop the
+                recording before next script</h2>
+            <button id="next-script-btn" class="btn btn-warning" style="margin-top: 1rem; font-size: 1.2rem;"
+                onclick="nextScript()">Next Script</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    @keyframes blinker {
+        50% {
+            opacity: 0;
+        }
+    }
+</style>
+</div>
+
+<div id="expired-section" style="display: none;">
+    <div class="alert alert-danger" style="margin-top: 2rem;">
+        <h2>Meeting Ended</h2>
+        <p style="color: inherit;">Your partner joined and left the meeting, or the meeting expired.</p>
+        <a href="{% url 'dashboard' %}" class="btn btn-outline"
+            style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const meetingId = "{{ meeting.meeting_id }}";
+    const isPairedInitially = "{{ meeting.status }}" === "paired";
+
+    function copyEmailPopup() {
+        const textToCopy = document.getElementById("popup-user-email").innerText.trim();
+        navigator.clipboard.writeText(textToCopy).then(() => {
+            const btn = document.getElementById("popup-copy-btn");
+            btn.innerText = "Copied!";
+            setTimeout(() => {
+                document.getElementById('email-modal').style.display = 'none';
+            }, 1000);
+        });
+    }
+
+    let checkInterval;
+    let currentStatus = "{{ meeting.status }}";
+    let currentTopicId = null;
+
+    let hasShownPopup = false;
+    let doneTimer = null;
+    let doneTimeLeft = 60;
+
+    if (isPairedInitially) {
+        hasShownPopup = true;
+    }
+
+    function checkStatus() {
+        fetch(`/api/meeting-status/?meeting_id=${meetingId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'joined_other') {
+                    window.location.reload();
+                    return;
+                }
+                if (data.status === 'paired' && (currentStatus === 'waiting' || currentStatus === 'searching')) {
+                    // We are paired now!
+                    currentStatus = 'paired';
+                    document.getElementById('wait-section').style.display = 'none';
+                    document.getElementById('paired-section').style.display = 'block';
+                    if (!hasShownPopup) {
+                        hasShownPopup = true;
+                    }
+                } else if (data.status === 'timeout' || data.status === 'expired' || data.status === 'completed') {
+                    // Meeting ended
+                    document.getElementById('wait-section').style.display = 'none';
+                    document.getElementById('paired-section').style.display = 'none';
+                    document.getElementById('expired-section').style.display = 'block';
+                    clearInterval(checkInterval);
+                    if (data.status === 'timeout') {
+                        document.getElementById('expired-section').innerHTML = '<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Currently no users are here</h2><p>Please search after 15 minutes.</p></div>';
+                        setTimeout(() => {
+                            window.location.href = "{% url 'dashboard' %}";
+                        }, 5000);
+                    } else if (data.status === 'expired' && data.error) {
+                        document.getElementById('expired-section').innerHTML = `<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Meeting Ended</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
+                    }
+                }
+
+                // Update Partner Name
+                if (data.partner_name) {
+                    const partnerDisplay = document.getElementById('partner-name-display');
+                    partnerDisplay.style.display = 'block';
+                    if (data.partner_disconnected) {
+                        partnerDisplay.querySelector('span').innerHTML = data.partner_name + ' <span style="color:var(--danger);font-weight:bold;">(Partner Disconnected - Waiting for them to Reconnect...)</span>';
+                    } else {
+                        partnerDisplay.querySelector('span').innerText = data.partner_name;
+                    }
+                }
+
+                if (data.both_done) {
+                    document.getElementById('done-script-btn').style.display = 'none';
+                    document.getElementById('script-section').style.display = 'none';
+                    document.getElementById('single-done-msg').style.display = 'none';
+                    document.getElementById('both-done-msg').style.display = 'block';
+                }
+
+                // Check if script changed dynamically
+                if (data.topic_id && data.topic_id !== currentTopicId) {
+                    currentTopicId = data.topic_id;
+                    const scriptBox = document.getElementById('script-section');
+                    const scriptHeader = document.getElementById('script-header');
+
+                    if (scriptBox.style.display === 'block') {
+                        scriptBox.innerHTML = data.script_html;
+
+                        if (data.script_number) {
+                            document.getElementById('script-title').innerText = `Script ${data.script_number}`;
+
+                            // Trigger blink for 10 seconds, but keep it permanently visible
+                            scriptHeader.style.display = 'block';
+                            scriptHeader.classList.add('blinking-warning');
+                            scriptHeader.style.background = ''; // Use CSS default from blinking-warning
+                            scriptHeader.style.border = '';
+                            scriptHeader.style.color = '';
+
+                            setTimeout(() => {
+                                scriptHeader.classList.remove('blinking-warning');
+                                // Keep it visible but style it nicely as a normal header
+                                scriptHeader.style.background = 'var(--surface-color)';
+                                scriptHeader.style.border = '1px solid var(--primary)';
+                                scriptHeader.style.color = 'var(--text-main)';
+                                scriptHeader.style.borderRadius = '10px';
+                            }, 10000);
+                        }
+
+                        resetDoneButton();
+                    }
+                }
+            })
+            .catch(err => console.error(err));
+    }
+
+    if (!isPairedInitially) {
+        checkInterval = setInterval(checkStatus, 3000);
+    } else {
+        // Even if paired, check periodically to see if partner left
+        checkInterval = setInterval(checkStatus, 5000);
+    }
+
+    function getScript() {
+        fetch(`/api/meeting-status/?meeting_id=${meetingId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.topic_id) {
+                    currentTopicId = data.topic_id;
+
+                    if (data.partner_name) {
+                        const partnerDisplay = document.getElementById('partner-name-display');
+                        partnerDisplay.style.display = 'block';
+                        partnerDisplay.querySelector('span').innerText = data.partner_name;
+                    }
+
+                    const scriptBox = document.getElementById('script-section');
+                    scriptBox.innerHTML = data.script_html;
+                    scriptBox.style.display = 'block';
+
+                    const scriptHeader = document.getElementById('script-header');
+                    if (data.script_number) {
+                        document.getElementById('script-title').innerText = `Script ${data.script_number}`;
+                        scriptHeader.style.display = 'block';
+                        scriptHeader.classList.add('blinking-warning');
+                        scriptHeader.style.background = '';
+                        scriptHeader.style.border = '';
+                        scriptHeader.style.color = '';
+
+                        setTimeout(() => {
+                            scriptHeader.classList.remove('blinking-warning');
+                            scriptHeader.style.background = 'var(--surface-color)';
+                            scriptHeader.style.border = '1px solid var(--primary)';
+                            scriptHeader.style.color = 'var(--text-main)';
+                            scriptHeader.style.borderRadius = '10px';
+                        }, 10000);
+                    }
+
+                    document.getElementById('get-script-btn').style.display = 'none';
+                    document.getElementById('confirm-section').style.display = 'block';
+                    resetDoneButton();
+                } else {
+                    alert("Script not available. Please go back and join again.");
+                }
+            })
+            .catch(err => {
+                alert("Error fetching script.");
+            });
+    }
+
+    function resetDoneButton() {
+        const doneBtn = document.getElementById('done-script-btn');
+        document.getElementById('both-done-msg').style.display = 'none';
+        document.getElementById('single-done-msg').style.display = 'none';
+
+        const startMsg = document.getElementById('start-recording-msg');
+        if (startMsg) startMsg.style.display = 'block';
+
+        document.getElementById('script-section').style.display = 'block';
+        doneBtn.style.display = 'inline-block';
+        doneBtn.disabled = true;
+        doneBtn.innerHTML = 'Done Script'; // Changed to hide 60s timer visually
+        doneTimeLeft = 60;
+        if (doneTimer) clearInterval(doneTimer);
+        doneTimer = setInterval(() => {
+            doneTimeLeft--;
+            if (doneTimeLeft <= 0) {
+                clearInterval(doneTimer);
+                doneBtn.disabled = false;
+            }
+        }, 1000);
+    }
+
+    function doneScript() {
+        const formData = new FormData();
+        formData.append('meeting_id', meetingId);
+        formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+        const startMsg = document.getElementById('start-recording-msg');
+        if (startMsg) startMsg.style.display = 'none';
+
+        document.getElementById('script-section').style.display = 'none';
+        const doneBtn = document.getElementById('done-script-btn');
+        doneBtn.style.display = 'none';
+        document.getElementById('single-done-msg').style.display = 'block';
+
+        fetch('/api/done-script/', {
+            method: 'POST',
+            body: formData
+        }).then(res => res.json()).then(data => {
+            if (data.success) {
+                checkStatus(); // Force check immediately
+            }
+        });
+    }
+
+    function nextScript() {
+        if (confirm("⚠ WARNING: স্ক্রিপ্ট পরিবর্তন করার আগে দয়া করে রেকর্ডিং টুলের STOP বাটনে ক্লিক করুন এবং uploading শুরু হওয়া পর্যন্ত ১০-১৫ সেকেন্ড অপেক্ষা করুন।\n\nআপনি কি নিশ্চিত যে আপনি স্ক্রিপ্ট পরিবর্তন করতে চান?")) {
+            const formData = new FormData();
+            formData.append('meeting_id', meetingId);
+            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+
+            fetch('/api/next-script/', {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('confirm-section').style.display = 'none';
+                        document.getElementById('get-script-btn').style.display = 'inline-block';
+                        document.getElementById('script-section').style.display = 'none';
+                        document.getElementById('both-done-msg').style.display = 'none';
+                        checkStatus(); // Force fetch new script immediately rather than waiting for interval
+                    } else if (data.empty_redirect) {
+                        alert(data.error + " Redirecting you back to dashboard...");
+                        window.location.href = "{% url 'dashboard' %}";
+                    } else {
+                        alert("Could not change the script.");
+                    }
+                });
+        }
+    }
+
+    // Prevent accidental back navigation
+    window.addEventListener('beforeunload', function (e) {
+        if (currentStatus === 'paired' && document.getElementById('expired-section').style.display === 'none') {
+            e.preventDefault();
+            e.returnValue = 'Are you sure you want to leave? Your meeting is still active and waiting for a partner.';
+            return e.returnValue;
+        }
+    });
+</script>
+{% endblock %}

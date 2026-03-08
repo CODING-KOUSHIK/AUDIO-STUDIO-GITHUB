@@ -1,0 +1,28 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Django
+db.sqlite3
+db.sqlite3-journal
+*.log
+local_settings.py
+.env
+
+# Static files
+staticfiles/
+
+# VS Code / IDE
+.vscode/
+.idea/
+*.swp
+
+# Project specific
+BiswasTechAudioPlatform.zip

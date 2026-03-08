@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Sign Up</h1>
+<p>Join the Biswas Tech Dual Recording Platform</p>
+
+<form method="POST" action="{% url 'signup' %}">
+    {% csrf_token %}
+    <div class="form-group">
+        <label>User Name</label>
+        <input type="text" name="name" required placeholder="Enter your full name">
+    </div>
+    <div class="form-group">
+        <label>Contact Number</label>
+        <input type="text" name="contact_number" id="contact_number" required placeholder="Ex: 01700000000">
+    </div>
+    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+        <input type="checkbox" id="same_whatsapp" name="same_whatsapp" style="width: auto;">
+        <label for="same_whatsapp" style="margin-bottom: 0;">Same as WhatsApp number</label>
+    </div>
+    <div class="form-group">
+        <label>WhatsApp Number</label>
+        <input type="text" name="whatsapp_number" id="whatsapp_number" required placeholder="Ex: 01700000000">
+    </div>
+
+    <script>
+        document.getElementById('same_whatsapp').addEventListener('change', function () {
+            var whatsappInput = document.getElementById('whatsapp_number');
+            if (this.checked) {
+                whatsappInput.value = document.getElementById('contact_number').value;
+                whatsappInput.readOnly = true;
+            } else {
+                whatsappInput.value = '';
+                whatsappInput.readOnly = false;
+            }
+        });
+        document.getElementById('contact_number').addEventListener('input', function () {
+            var whatsappInput = document.getElementById('whatsapp_number');
+            if (document.getElementById('same_whatsapp').checked) {
+                whatsappInput.value = this.value;
+            }
+        });
+    </script>
+    <div class="form-group">
+        <label>Gender</label>
+        <select name="gender" required>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Other">Other</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Date of Birth</label>
+        <input type="date" name="date_of_birth" required>
+    </div>
+    <div class="form-group">
+        <label>District</label>
+        <select name="district" required>
+            <option value="" disabled selected>Select District</option>
+            <option value="Alipurduar">Alipurduar</option>
+            <option value="Bankura">Bankura</option>
+            <option value="Birbhum">Birbhum</option>
+            <option value="Cooch Behar">Cooch Behar</option>
+            <option value="Dakshin Dinajpur">Dakshin Dinajpur</option>
+            <option value="Darjeeling">Darjeeling</option>
+            <option value="Hooghly">Hooghly</option>
+            <option value="Howrah">Howrah</option>
+            <option value="Jalpaiguri">Jalpaiguri</option>
+            <option value="Jhargram">Jhargram</option>
+            <option value="Kalimpong">Kalimpong</option>
+            <option value="Kolkata">Kolkata</option>
+            <option value="Malda">Malda</option>
+            <option value="Murshidabad">Murshidabad</option>
+            <option value="Nadia">Nadia</option>
+            <option value="North 24 Parganas">North 24 Parganas</option>
+            <option value="Paschim Bardhaman">Paschim Bardhaman</option>
+            <option value="Paschim Medinipur">Paschim Medinipur</option>
+            <option value="Purba Bardhaman">Purba Bardhaman</option>
+            <option value="Purba Medinipur">Purba Medinipur</option>
+            <option value="Purulia">Purulia</option>
+            <option value="South 24 Parganas">South 24 Parganas</option>
+            <option value="Uttar Dinajpur">Uttar Dinajpur</option>
+            <option value="Others">Others</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" required placeholder="Ex: example@gmail.com">
+    </div>
+
+    <button type="submit" class="btn btn-primary">Create Account</button>
+</form>
+<p style="margin-top: 1rem;">Already have an account? <a href="{% url 'login' %}" style="color: var(--primary);">Login
+        here</a></p>
+{% endblock %}

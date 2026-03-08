@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Login</h1>
+<p>Welcome back to Biswas Tech Dual Recording</p>
+
+<form method="POST" action="{% url 'login' %}">
+    {% csrf_token %}
+    <div class="form-group">
+        <label>Email Address</label>
+        <input type="email" name="email" required placeholder="Enter your registered email">
+    </div>
+
+    <button type="submit" class="btn btn-primary">Login with OTP</button>
+</form>
+
+<p style="margin-top: 1rem;">Don't have an account? <a href="{% url 'signup' %}" style="color: var(--primary);">Sign
+        up</a></p>
+{% endblock %}

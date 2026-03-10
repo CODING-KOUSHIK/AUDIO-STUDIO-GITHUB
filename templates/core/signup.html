@@ -88,6 +88,13 @@
         <input type="email" name="email" required placeholder="Ex: example@gmail.com">
     </div>
 
+    <div class="form-group" style="display: flex; align-items: flex-start; gap: 10px; margin-bottom: 1.5rem;">
+        <input type="checkbox" id="agree_terms" name="agree_terms" required style="width: auto; margin-top: 5px; cursor: pointer;">
+        <label for="agree_terms" style="margin-bottom: 0; font-size: 0.9rem; font-weight: normal; cursor: pointer;">
+            I agree to the <a href="/terms/" target="_blank" style="color: var(--primary); text-decoration: underline;">Terms and Conditions</a>. Without agreeing, you cannot sign up.
+        </label>
+    </div>
+
     <button type="submit" class="btn btn-primary">Create Account</button>
 </form>
 <p style="margin-top: 1rem;">Already have an account? <a href="{% url 'login' %}" style="color: var(--primary);">Login

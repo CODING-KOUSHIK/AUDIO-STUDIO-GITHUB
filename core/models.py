@@ -73,6 +73,7 @@ class StudioLinkDatabase(models.Model):
     email2 = models.EmailField() # Guest Studio Email
     meeting_url = models.URLField(max_length=500)
     is_used = models.BooleanField(default=False)
+    topic = models.ForeignKey('TopicDatabase', on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
         return self.name_id

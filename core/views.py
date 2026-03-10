@@ -12,6 +12,9 @@ from .models import User, OTPVerification, TopicDatabase, MeetingDatabase, Studi
 def index(request):
     return render(request, 'core/index.html')
 
+def terms(request):
+    return render(request, 'core/terms.html')
+
 
 
 def signup(request):
@@ -300,99 +303,113 @@ def meeting_status_api(request):
                 meeting.status = 'timeout'
                 meeting.save()
                 return JsonResponse({'status': 'timeout'})
-            elif diff_seconds >= 10:
+            else:
                 with transaction.atomic():
                     meeting = MeetingDatabase.objects.select_for_update().get(meeting_id=meeting.meeting_id)
                     if meeting.status != 'searching':
                         return JsonResponse({'status': meeting.status, 'joined_meeting_id': meeting.joined_meeting_id})
                         
                     candidates = MeetingDatabase.objects.filter(status='searching').exclude(meeting_id=meeting.meeting_id).select_for_update()
-                    valid_candidates = [c for c in candidates if (now_time - c.created_at).total_seconds() >= 10]
+                    valid_candidates = list(candidates)
                     
                     if valid_candidates:
                         matched_candidate = None
-                    best_history = None
-                    try:
-                        u1 = User.objects.get(email=meeting.host_mail_id)
-                        for cand in valid_candidates:
-                            try:
-                                u2 = User.objects.get(email=cand.host_mail_id)
-                                h1 = UserMeetingHistory.objects.filter(user1=u1, user2=u2).first()
-                                h2 = UserMeetingHistory.objects.filter(user1=u2, user2=u1).first()
-                                history = h1 or h2
-                                if history and 1 <= history.script_count <= 25:
-                                    if best_history is None or history.script_count < best_history.script_count:
-                                        best_history = history
-                                        matched_candidate = cand
-                            except User.DoesNotExist:
-                                pass
-                    except User.DoesNotExist:
-                        pass
-                    
-                    if not matched_candidate:
-                        matched_candidate = valid_candidates[0]
+                        best_history = None
                         
-                    if best_history:
-                        is_u1_host = (meeting.host_mail_id == best_history.last_host.email)
-                        if is_u1_host:
-                            meeting.status = 'paired'
-                            meeting.guest_mail_id = matched_candidate.host_mail_id
-                            meeting.guest_name = matched_candidate.host_name
-                            meeting.guest_age = matched_candidate.host_age
-                            meeting.guest_gender = matched_candidate.host_gender
-                            meeting.guest_dist = matched_candidate.host_dist
-                            meeting.meeting_url = best_history.last_meeting_url
-                            # Keep old studio emails? They aren't in history... let's assume they aren't needed or are same
-                            matched_candidate.status = 'joined_other'
-                            matched_candidate.joined_meeting_id = str(meeting.meeting_id)
-                        else:
-                            matched_candidate.status = 'paired'
-                            matched_candidate.guest_mail_id = meeting.host_mail_id
-                            matched_candidate.guest_name = meeting.host_name
-                            matched_candidate.guest_age = meeting.host_age
-                            matched_candidate.guest_gender = meeting.host_gender
-                            matched_candidate.guest_dist = meeting.host_dist
-                            matched_candidate.meeting_url = best_history.last_meeting_url
-                            meeting.status = 'joined_other'
-                            meeting.joined_meeting_id = str(matched_candidate.meeting_id)
-                    else:
-                        available_link = StudioLinkDatabase.objects.filter(is_used=False).first()
-                        if available_link:
-                            available_link.is_used = True
-                            available_link.save()
-                            meeting.status = 'paired'
-                            meeting.guest_mail_id = matched_candidate.host_mail_id
-                            meeting.guest_name = matched_candidate.host_name
-                            meeting.guest_age = matched_candidate.host_age
-                            meeting.guest_gender = matched_candidate.host_gender
-                            meeting.guest_dist = matched_candidate.host_dist
-                            meeting.studio_host_email = available_link.email1
-                            meeting.studio_guest_email = available_link.email2
-                            meeting.meeting_url = available_link.meeting_url
+                        try:
+                            u1 = User.objects.get(email=meeting.host_mail_id)
+                            for cand in valid_candidates:
+                                try:
+                                    u2 = User.objects.get(email=cand.host_mail_id)
+                                    h1 = UserMeetingHistory.objects.filter(user1=u1, user2=u2).first()
+                                    h2 = UserMeetingHistory.objects.filter(user1=u2, user2=u1).first()
+                                    history = h1 or h2
+                                    if history and 1 <= history.script_count <= 25:
+                                        if best_history is None or history.script_count < best_history.script_count:
+                                            best_history = history
+                                            matched_candidate = cand
+                                except User.DoesNotExist:
+                                    pass
+                        except User.DoesNotExist:
+                            pass
+                        
+                        if not matched_candidate:
+                            matched_candidate = valid_candidates[0]
                             
-                            matched_candidate.status = 'joined_other'
-                            matched_candidate.joined_meeting_id = str(meeting.meeting_id)
+                        assigned_url = None
+                        if best_history:
+                            is_u1_host = (meeting.host_mail_id == best_history.last_host.email)
+                            if is_u1_host:
+                                meeting.status = 'paired'
+                                meeting.guest_mail_id = matched_candidate.host_mail_id
+                                meeting.guest_name = matched_candidate.host_name
+                                meeting.guest_age = matched_candidate.host_age
+                                meeting.guest_gender = matched_candidate.host_gender
+                                meeting.guest_dist = matched_candidate.host_dist
+                                meeting.meeting_url = best_history.last_meeting_url
+                                matched_candidate.status = 'joined_other'
+                                matched_candidate.joined_meeting_id = str(meeting.meeting_id)
+                            else:
+                                matched_candidate.status = 'paired'
+                                matched_candidate.guest_mail_id = meeting.host_mail_id
+                                matched_candidate.guest_name = meeting.host_name
+                                matched_candidate.guest_age = meeting.host_age
+                                matched_candidate.guest_gender = meeting.host_gender
+                                matched_candidate.guest_dist = meeting.host_dist
+                                matched_candidate.meeting_url = best_history.last_meeting_url
+                                meeting.status = 'joined_other'
+                                meeting.joined_meeting_id = str(matched_candidate.meeting_id)
+                            assigned_url = best_history.last_meeting_url
                         else:
-                            return JsonResponse({'status': 'searching'})
+                            available_link = StudioLinkDatabase.objects.filter(is_used=False).first()
+                            if available_link:
+                                available_link.is_used = True
+                                available_link.save()
+                                meeting.status = 'paired'
+                                meeting.guest_mail_id = matched_candidate.host_mail_id
+                                meeting.guest_name = matched_candidate.host_name
+                                meeting.guest_age = matched_candidate.host_age
+                                meeting.guest_gender = matched_candidate.host_gender
+                                meeting.guest_dist = matched_candidate.host_dist
+                                meeting.studio_host_email = available_link.email1
+                                meeting.studio_guest_email = available_link.email2
+                                meeting.meeting_url = available_link.meeting_url
+                                
+                                matched_candidate.status = 'joined_other'
+                                matched_candidate.joined_meeting_id = str(meeting.meeting_id)
+                                assigned_url = available_link.meeting_url
+                            else:
+                                return JsonResponse({'status': 'searching'})
+                                
+                        paired_meeting = meeting if meeting.status == 'paired' else matched_candidate
+                        
+                        # Find topic using the assigned link
+                        link_db = StudioLinkDatabase.objects.filter(meeting_url=assigned_url).first()
+                        if link_db and link_db.topic:
+                            topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic.topic_name))
+                        else:
+                            topics = list(TopicDatabase.objects.filter(is_done=False))
                             
-                    paired_meeting = meeting if meeting.status == 'paired' else matched_candidate
-                    topics = list(TopicDatabase.objects.filter(is_done=False))
-                    if topics:
-                        selected_topic = random.choice(topics)
-                        selected_topic.is_done = True
-                        selected_topic.save()
-                        paired_meeting.topic = selected_topic
-                        paired_meeting.last_script_change_time = timezone.now()
-                        paired_meeting.valid_script_count = 0
-                        paired_meeting.played_topic_ids_comma_separated = selected_topic.topic_id
+                        if not topics and link_db and link_db.topic:
+                            # fallback to any topic
+                            topics = list(TopicDatabase.objects.filter(is_done=False))
+
+                        if topics:
+                            selected_topic = random.choice(topics)
+                            selected_topic.is_done = True
+                            selected_topic.save()
+                            paired_meeting.topic = selected_topic
+                            paired_meeting.last_script_change_time = timezone.now()
+                            paired_meeting.valid_script_count = 0
+                            paired_meeting.played_topic_ids_comma_separated = selected_topic.topic_id
+                            paired_meeting.save()
+                            paired_meeting.played_topics.add(paired_meeting.topic)
+                        
                         paired_meeting.save()
-                        paired_meeting.played_topics.add(paired_meeting.topic)
-                    
-                    paired_meeting.save()
-                    if matched_candidate != paired_meeting:
-                        matched_candidate.save()
-                    if meeting != paired_meeting:
-                        meeting.save()
+                        if matched_candidate != paired_meeting:
+                            matched_candidate.save()
+                        if meeting != paired_meeting:
+                            meeting.save()
 
             return JsonResponse({'status': meeting.status, 'joined_meeting_id': meeting.joined_meeting_id})
 

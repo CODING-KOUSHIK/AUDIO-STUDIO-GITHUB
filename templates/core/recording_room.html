@@ -66,9 +66,14 @@
         </div>
     </div>
 
+    <div style="text-align: right; margin-bottom: 5px;">
+        <button onclick="refreshIframe()" class="btn btn-warning" style="font-size: 0.9rem; padding: 5px 12px; background-color: #ffc107; color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+            &#x21bb; Refresh Studio if Problem
+        </button>
+    </div>
     <div class="recording-iframe-container">
         <!-- Using user email inside query params could be useful, but url is already generated -->
-        <iframe src="{{ meeting.meeting_url }}" allow="microphone"></iframe>
+        <iframe id="studio-iframe" src="{{ meeting.meeting_url }}" allow="microphone"></iframe>
     </div>
 
     <button id="get-script-btn" class="btn btn-primary" onclick="getScript()">Get Script</button>
@@ -125,6 +130,16 @@
 <script>
     const meetingId = "{{ meeting.meeting_id }}";
     const isPairedInitially = "{{ meeting.status }}" === "paired";
+
+    function refreshIframe() {
+        if(confirm("If you face any problem or are asked for an email, please refresh. You may need to paste the email again. Click OK to refresh.")) {
+            const iframe = document.getElementById('studio-iframe');
+            iframe.src = iframe.src;
+            
+            document.getElementById('email-modal').style.display = 'block';
+            document.getElementById('popup-copy-btn').innerText = 'Copy Email';
+        }
+    }
 
     function copyEmailPopup() {
         const textToCopy = document.getElementById("popup-user-email").innerText.trim();

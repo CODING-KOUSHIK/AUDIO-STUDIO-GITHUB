@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div style="max-width: 800px; margin: 2rem auto; padding: 20px; background: white; border-radius: 8px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+    <h1 style="color: var(--primary); text-align: center; margin-bottom: 2rem;">Terms and Conditions</h1>
+    
+    <div style="line-height: 1.6; color: #333;">
+        <!-- Paste your Terms and Conditions HTML here -->
+        <p>This is a placeholder for the Terms and Conditions. Please insert your HTML content here.</p>
+        
+        <h2>1. Introduction</h2>
+        <p>Welcome to our platform. By continuing to register and use our services, you agree to be bound by the following terms.</p>
+        
+        <h2>2. Usage Rules</h2>
+        <p>You agree to use the platform for its intended purposes only and conform to the guidelines provided.</p>
+
+        <!-- End of your content -->
+    </div>
+    
+    <div style="text-align: center; margin-top: 2rem;">
+        <a href="{% url 'signup' %}" class="btn btn-primary">Go Back to Sign Up</a>
+    </div>
+</div>
+{% endblock %}

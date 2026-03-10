@@ -20,11 +20,12 @@ class StudioLinkDatabaseAdmin(admin.ModelAdmin):
 @admin.register(MeetingDatabase)
 class MeetingDatabaseAdmin(admin.ModelAdmin):
     list_display = (
-        'meeting_url', 'topic', 'host_name', 'host_age', 'host_gender', 'get_host_location',
+        'meeting_id', 'status', 'meeting_url', 'topic', 'host_name', 'host_age', 'host_gender', 'get_host_location',
         'guest_name', 'guest_age', 'guest_gender', 'get_guest_location'
     )
+    list_display_links = ('meeting_id', 'meeting_url')
     list_filter = ('status', 'created_at')
-    search_fields = ('meeting_url', 'host_name', 'guest_name', 'host_mail_id', 'guest_mail_id')
+    search_fields = ('meeting_id', 'meeting_url', 'host_name', 'guest_name', 'host_mail_id', 'guest_mail_id')
 
     def get_host_location(self, obj):
         return obj.host_dist
@@ -45,6 +46,20 @@ class TransactionAdmin(admin.ModelAdmin):
     list_display = ('user', 'amount', 'transaction_type', 'status', 'date')
     list_filter = ('transaction_type', 'status', 'date')
     search_fields = ('user__email', 'user__name', 'comments')
+    readonly_fields = ('user_payout_details',)
+
+    def user_payout_details(self, obj):
+        payouts = PayoutMethod.objects.filter(user=obj.user)
+        if payouts.exists():
+            details = []
+            for p in payouts:
+                if p.method_type == 'upi':
+                    details.append(f"UPI: {p.upi_id} (Name: {p.upi_name})")
+                else:
+                    details.append(f"Bank: {p.bank_name}, A/c: {p.account_number}, IFSC: {p.ifsc_code}, Name: {p.account_holder_name}")
+            return " | ".join(details)
+        return "No payout details added by user yet."
+    user_payout_details.short_description = "User Payout Method Details"
 
 @admin.register(UserMeetingHistory)
 class UserMeetingHistoryAdmin(admin.ModelAdmin):

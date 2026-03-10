@@ -404,12 +404,12 @@ def meeting_status_api(request):
                         
                         # Find topic using the assigned link
                         link_db = StudioLinkDatabase.objects.filter(meeting_url=assigned_url).first()
-                        if link_db and link_db.topic:
-                            topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic.topic_name))
+                        if link_db and link_db.topic_category:
+                            topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic_category))
                         else:
                             topics = list(TopicDatabase.objects.filter(is_done=False))
                             
-                        if not topics and link_db and link_db.topic:
+                        if not topics and link_db and link_db.topic_category:
                             # fallback to any topic
                             topics = list(TopicDatabase.objects.filter(is_done=False))
 
@@ -570,8 +570,8 @@ def done_script_api(request):
                     
                     topics = []
                     link_db = StudioLinkDatabase.objects.filter(meeting_url=meeting.meeting_url).first()
-                    if link_db and link_db.topic:
-                        topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic.topic_name))
+                    if link_db and link_db.topic_category:
+                        topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic_category))
                     else:
                         topics = list(TopicDatabase.objects.filter(is_done=False))
                         
@@ -613,7 +613,7 @@ def done_script_api(request):
                         
                         # Send email
                         try:
-                            cat_name = link_db.topic.topic_name if (link_db and link_db.topic) else "Unknown"
+                            cat_name = link_db.topic_category if (link_db and link_db.topic_category) else "Unknown"
                             send_mail(
                                 f'Alert: No More Scripts for {cat_name}',
                                 f'Warning! Users have exhausted all scripts for the topic: {cat_name}.\n\nPlease upload more scripts immediately.',

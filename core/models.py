@@ -3,6 +3,17 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
 from django.utils import timezone
 
+TOPIC_CHOICES = [
+    ('ব্যবসা (Business)', 'ব্যবসা (Business)'),
+    ('ব্যক্তিগত অর্থায়ন (Personal Finance)', 'ব্যক্তিগত অর্থায়ন (Personal Finance)'),
+    ('কাস্টমার সাপোর্ট (Customer Support)', 'কাস্টমার সাপোর্ট (Customer Support)'),
+    ('রাজনীতি (Politics)', 'রাজনীতি (Politics)'),
+    ('ব্যাংকিং প্রশ্নাবলী (Banking)', 'ব্যাংকিং প্রশ্নাবলী (Banking)'),
+    ('কল সেন্টার (Call Center)', 'কল সেন্টার (Call Center)'),
+    ('খেলাধুলা (Sports)', 'খেলাধুলা (Sports)'),
+    ('সংবাদপত্রে আসার মতো গুরুত্বপূর্ণ বিষয় (Newspaper-worthy topics)', 'সংবাদপত্রে আসার মতো গুরুত্বপূর্ণ বিষয় (Newspaper-worthy topics)'),
+]
+
 class UserManager(BaseUserManager):
     def create_user(self, email, password=None, **extra_fields):
         if not email:
@@ -73,22 +84,12 @@ class StudioLinkDatabase(models.Model):
     email2 = models.EmailField() # Guest Studio Email
     meeting_url = models.URLField(max_length=500)
     is_used = models.BooleanField(default=False)
-    topic = models.ForeignKey('TopicDatabase', on_delete=models.SET_NULL, null=True, blank=True)
+    topic_category = models.CharField(max_length=255, choices=TOPIC_CHOICES, null=True, blank=True, help_text="Select the topic category for this studio link")
 
     def __str__(self):
         return self.name_id
 
 class TopicDatabase(models.Model):
-    TOPIC_CHOICES = [
-        ('ব্যবসা (Business)', 'ব্যবসা (Business)'),
-        ('ব্যক্তিগত অর্থায়ন (Personal Finance)', 'ব্যক্তিগত অর্থায়ন (Personal Finance)'),
-        ('কাস্টমার সাপোর্ট (Customer Support)', 'কাস্টমার সাপোর্ট (Customer Support)'),
-        ('রাজনীতি (Politics)', 'রাজনীতি (Politics)'),
-        ('ব্যাংকিং প্রশ্নাবলী (Banking)', 'ব্যাংকিং প্রশ্নাবলী (Banking)'),
-        ('কল সেন্টার (Call Center)', 'কল সেন্টার (Call Center)'),
-        ('খেলাধুলা (Sports)', 'খেলাধুলা (Sports)'),
-        ('সংবাদপত্রে আসার মতো গুরুত্বপূর্ণ বিষয় (Newspaper-worthy topics)', 'সংবাদপত্রে আসার মতো গুরুত্বপূর্ণ বিষয় (Newspaper-worthy topics)'),
-    ]
     topic_id = models.CharField(max_length=100, primary_key=True)
     topic_name = models.CharField(max_length=255, choices=TOPIC_CHOICES)
     script = models.TextField()

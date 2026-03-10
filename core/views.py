@@ -358,6 +358,8 @@ def meeting_status_api(request):
                         assigned_url = None
                         if best_history:
                             is_u1_host = (meeting.host_mail_id == best_history.last_host.email)
+                            link_db = StudioLinkDatabase.objects.filter(meeting_url=best_history.last_meeting_url).first()
+                            
                             if is_u1_host:
                                 meeting.status = 'paired'
                                 meeting.guest_mail_id = matched_candidate.host_mail_id
@@ -366,6 +368,9 @@ def meeting_status_api(request):
                                 meeting.guest_gender = matched_candidate.host_gender
                                 meeting.guest_dist = matched_candidate.host_dist
                                 meeting.meeting_url = best_history.last_meeting_url
+                                if link_db:
+                                    meeting.studio_host_email = link_db.email1
+                                    meeting.studio_guest_email = link_db.email2
                                 matched_candidate.status = 'joined_other'
                                 matched_candidate.joined_meeting_id = str(meeting.meeting_id)
                             else:
@@ -376,6 +381,9 @@ def meeting_status_api(request):
                                 matched_candidate.guest_gender = meeting.host_gender
                                 matched_candidate.guest_dist = meeting.host_dist
                                 matched_candidate.meeting_url = best_history.last_meeting_url
+                                if link_db:
+                                    matched_candidate.studio_host_email = link_db.email1
+                                    matched_candidate.studio_guest_email = link_db.email2
                                 meeting.status = 'joined_other'
                                 meeting.joined_meeting_id = str(matched_candidate.meeting_id)
                             assigned_url = best_history.last_meeting_url
@@ -482,16 +490,20 @@ def meeting_status_api(request):
             partner_name = meeting.guest_name if meeting.guest_name else "Waiting for partner..."
         else:
             partner_name = meeting.host_name if meeting.host_name else "Host"
+            
+        # Send correct email to correct side
+        user_studio_email = meeting.studio_host_email if is_host else meeting.studio_guest_email
 
         return JsonResponse({
-            'status': meeting.status,
-            'guest_mail_id': meeting.guest_mail_id,
+            'status': 'paired',
+            'partner_name': meeting.guest_name if is_host else meeting.host_name,
+            'meeting_url': meeting.meeting_url,
+            'user_studio_email': user_studio_email, # Provide correct email
             'script_html': script_html,
+            'script_number': meeting.valid_script_count + 1,
             'topic_id': topic_id,
-            'script_number': script_count,
-            'partner_name': partner_name,
-            'both_done': meeting.host_done_script and meeting.guest_done_script,
-            'partner_disconnected': partner_disconnected
+            'partner_disconnected': partner_disconnected,
+            'both_done': (meeting.host_done_script and meeting.guest_done_script)
         })
     except MeetingDatabase.DoesNotExist:
         return JsonResponse({'status': 'expired', 'error': 'Not found'}, status=404)
@@ -544,8 +556,8 @@ def done_script_api(request):
                     
                 # If BOTH are done, trigger script completion logic
                 if meeting.host_done_script and meeting.guest_done_script:
-                    # check if already incremented for this script to prevent double counting
-                    # add 6 rs to both
+                    
+                    # Add pending balance
                     from decimal import Decimal
                     try:
                         host_user = User.objects.get(email=meeting.host_mail_id)
@@ -554,8 +566,30 @@ def done_script_api(request):
                         guest_user.pending_balance += Decimal('6.00')
                         host_user.save()
                         guest_user.save()
+                        
+                        # Add tracking transactions (optional but user requested comment)
+                        Transaction.objects.create(
+                            user=host_user, amount=6.00,
+                            transaction_type='Credit',
+                            comments=f'1 Script done on {meeting.meeting_url}',
+                            status='Success'
+                        )
+                        Transaction.objects.create(
+                            user=guest_user, amount=6.00,
+                            transaction_type='Credit',
+                            comments=f'1 Script done on {meeting.meeting_url}',
+                            status='Success'
+                        )
                     except Exception as e:
                         pass
+                        
+                    # Mark link as used specifically when a script is successfully done
+                    try:
+                        link_ob = StudioLinkDatabase.objects.get(meeting_url=meeting.meeting_url)
+                        if not link_ob.is_used:
+                            link_ob.is_used = True
+                            link_ob.save()
+                    except: pass
                         
                     meeting.valid_script_count += 1
                     meeting.host_done_script = False

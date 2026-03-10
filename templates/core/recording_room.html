@@ -67,7 +67,7 @@
     </div>
 
     <div style="text-align: right; margin-bottom: 5px;">
-        <button onclick="refreshIframe()" class="btn btn-warning" style="font-size: 0.9rem; padding: 5px 12px; background-color: #ffc107; color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+        <button id="refresh-iframe-btn" onclick="refreshIframe()" class="btn btn-warning" style="display: none; font-size: 0.9rem; padding: 5px 12px; background-color: #ffc107; color: #000; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
             &#x21bb; Refresh Studio if Problem
         </button>
     </div>
@@ -100,7 +100,7 @@
         <div id="both-done-msg" style="display: none; margin-top: 20px;">
             <h2 id="stop-recording-msg" style="color: red; animation: blinker 1s linear infinite;">Please stop the
                 recording before next script</h2>
-            <button id="next-script-btn" class="btn btn-warning" style="margin-top: 1rem; font-size: 1.2rem;"
+            <button id="next-script-btn" class="btn btn-warning" style="margin-top: 1rem; font-size: 1.2rem; display: none;"
                 onclick="nextScript()">Next Script</button>
         </div>
     </div>
@@ -118,7 +118,7 @@
 <div id="expired-section" style="display: none;">
     <div class="alert alert-danger" style="margin-top: 2rem;">
         <h2>Meeting Ended</h2>
-        <p style="color: inherit;">Your partner joined and left the meeting, or the meeting expired.</p>
+        <p style="color: inherit;" id="expired-error-msg">Your partner joined and left the meeting, or the meeting expired.</p>
         <a href="{% url 'dashboard' %}" class="btn btn-outline"
             style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a>
     </div>
@@ -159,9 +159,19 @@
     let hasShownPopup = false;
     let doneTimer = null;
     let doneTimeLeft = 60;
+    let refreshTimer = null;
+
+    function startRefreshTimer() {
+        if (refreshTimer) return;
+        refreshTimer = setTimeout(() => {
+            const btn = document.getElementById('refresh-iframe-btn');
+            if(btn) btn.style.display = 'inline-block';
+        }, 60000); // 1 minute
+    }
 
     if (isPairedInitially) {
         hasShownPopup = true;
+        startRefreshTimer();
     }
 
     function checkStatus() {
@@ -180,6 +190,7 @@
                     if (!hasShownPopup) {
                         hasShownPopup = true;
                     }
+                    startRefreshTimer();
                 } else if (data.status === 'timeout' || data.status === 'expired' || data.status === 'completed') {
                     // Meeting ended
                     document.getElementById('wait-section').style.display = 'none';

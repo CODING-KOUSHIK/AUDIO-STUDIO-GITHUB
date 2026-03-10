@@ -145,21 +145,29 @@ def resend_otp(request):
 
 @login_required
 def dashboard(request):
+    from django.db.models import Q
+    
+    # If user comes to dashboard, cancel any of their active meetings (reconnect disabled)
+    active = MeetingDatabase.objects.filter(
+        Q(host_mail_id=request.user.email) | Q(guest_mail_id=request.user.email),
+        status__in=['paired', 'searching']
+    ).first()
+    if active:
+        active.status = 'expired'
+        active.save()
+        if active.valid_script_count == 0 and active.meeting_url:
+            try:
+                link = StudioLinkDatabase.objects.get(meeting_url=active.meeting_url)
+                link.is_used = False
+                link.save()
+            except: pass
+
     meetings = []
     if request.user.is_staff:
         # Show all meeting info with data_taken checkbox for admin
         meetings = MeetingDatabase.objects.all().order_by('-created_at')[:20]
 
-    from django.db.models import Q
-    has_active_meeting = MeetingDatabase.objects.filter(
-        Q(host_mail_id=request.user.email) | Q(guest_mail_id=request.user.email),
-        status__in=['paired', 'searching']
-    ).first()
-
-    if has_active_meeting:
-        request.session['current_meeting'] = str(has_active_meeting.meeting_id)
-
-    return render(request, 'core/dashboard.html', {'user': request.user, 'meetings': meetings, 'has_active_meeting': bool(has_active_meeting)})
+    return render(request, 'core/dashboard.html', {'user': request.user, 'meetings': meetings})
 
 @login_required
 def payment_dashboard(request):
@@ -278,24 +286,35 @@ def meeting_status_api(request):
         if meeting.status == 'paired':
             other_heartbeat = meeting.guest_last_heartbeat if is_host else meeting.host_last_heartbeat
             time_since_creation = (now_time - meeting.created_at).total_seconds()
+            disconnected_time = (now_time - other_heartbeat).total_seconds() if other_heartbeat else time_since_creation
             
-            # Partner left or disconnected unexpectedly
-            if (other_heartbeat and (now_time - other_heartbeat).total_seconds() > 20) or (not other_heartbeat and time_since_creation > 45):
-                partner_disconnected = True
+            if time_since_creation < 60:
+                if disconnected_time > 15:
+                    meeting.status = 'expired'
+                    meeting.save()
+                    if meeting.valid_script_count == 0 and meeting.meeting_url:
+                        try:
+                            link = StudioLinkDatabase.objects.get(meeting_url=meeting.meeting_url)
+                            link.is_used = False
+                            link.save()
+                        except StudioLinkDatabase.DoesNotExist:
+                            pass
+                    return JsonResponse({'status': 'expired', 'error': 'Your partner joined and left the room.'})
+            else:
+                if disconnected_time > 20:
+                    partner_disconnected = True
                 
-            if (other_heartbeat and (now_time - other_heartbeat).total_seconds() > 600) or (not other_heartbeat and time_since_creation > 600):
-                meeting.status = 'expired'
-                meeting.save()
-                
-                # Free unused link
-                if meeting.valid_script_count == 0 and meeting.meeting_url:
-                    try:
-                        link = StudioLinkDatabase.objects.get(meeting_url=meeting.meeting_url)
-                        link.is_used = False
-                        link.save()
-                    except StudioLinkDatabase.DoesNotExist:
-                        pass
-                return JsonResponse({'status': 'expired', 'error': 'Partner disconnected for too long'})
+                if disconnected_time > 600:
+                    meeting.status = 'expired'
+                    meeting.save()
+                    if meeting.valid_script_count == 0 and meeting.meeting_url:
+                        try:
+                            link = StudioLinkDatabase.objects.get(meeting_url=meeting.meeting_url)
+                            link.is_used = False
+                            link.save()
+                        except StudioLinkDatabase.DoesNotExist:
+                            pass
+                    return JsonResponse({'status': 'expired', 'error': 'Partner disconnected for too long'})
 
         if meeting.status == 'searching':
             diff_seconds = (now_time - meeting.created_at).total_seconds()
@@ -506,99 +525,111 @@ def done_script_api(request):
     if request.method == 'POST':
         meeting_id = request.POST.get('meeting_id')
         try:
-            meeting = MeetingDatabase.objects.get(meeting_id=meeting_id)
-            is_host = (request.user.email == meeting.host_mail_id)
-            changed = False
-            if is_host:
-                if not meeting.host_done_script:
-                    meeting.host_done_script = True
-                    changed = True
-            else:
-                if not meeting.guest_done_script:
-                    meeting.guest_done_script = True
-                    changed = True
-            if changed:
-                meeting.save()
-                # Award 6 Rs immediately upon clicking Done Script appropriately
-                from decimal import Decimal
-                try:
-                    request.user.pending_balance += Decimal('6.00')
-                    request.user.save()
-                except Exception: pass
-            return JsonResponse({'success': True})
+            with transaction.atomic():
+                meeting = MeetingDatabase.objects.select_for_update().get(meeting_id=meeting_id)
+                is_host = (request.user.email == meeting.host_mail_id)
+                changed = False
+                
+                if is_host:
+                    if not meeting.host_done_script:
+                        meeting.host_done_script = True
+                        changed = True
+                else:
+                    if not meeting.guest_done_script:
+                        meeting.guest_done_script = True
+                        changed = True
+                
+                if changed:
+                    meeting.save()
+                    
+                # If BOTH are done, trigger script completion logic
+                if meeting.host_done_script and meeting.guest_done_script:
+                    # check if already incremented for this script to prevent double counting
+                    # add 6 rs to both
+                    from decimal import Decimal
+                    try:
+                        host_user = User.objects.get(email=meeting.host_mail_id)
+                        guest_user = User.objects.get(email=meeting.guest_mail_id)
+                        host_user.pending_balance += Decimal('6.00')
+                        guest_user.pending_balance += Decimal('6.00')
+                        host_user.save()
+                        guest_user.save()
+                    except Exception as e:
+                        pass
+                        
+                    meeting.valid_script_count += 1
+                    meeting.host_done_script = False
+                    meeting.guest_done_script = False
+                    
+                    if meeting.valid_script_count >= 30:
+                        meeting.status = 'completed'
+                        meeting.save()
+                        return JsonResponse({'success': True, 'completed': True, 'msg': 'Max 30 scripts done!'})
+                        
+                    now = timezone.now()
+                    
+                    topics = []
+                    link_db = StudioLinkDatabase.objects.filter(meeting_url=meeting.meeting_url).first()
+                    if link_db and link_db.topic:
+                        topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic.topic_name))
+                    else:
+                        topics = list(TopicDatabase.objects.filter(is_done=False))
+                        
+                    if topics:
+                        new_topic = random.choice(topics)
+                        new_topic.is_done = True
+                        new_topic.save()
+                        
+                        meeting.topic = new_topic
+                        meeting.last_script_change_time = now
+                        if meeting.played_topic_ids_comma_separated:
+                            meeting.played_topic_ids_comma_separated += f",{new_topic.topic_id}"
+                        else:
+                            meeting.played_topic_ids_comma_separated = new_topic.topic_id
+                        meeting.save()
+                        meeting.played_topics.add(meeting.topic)
+                        
+                        try:
+                            h_user = User.objects.get(email=meeting.host_mail_id)
+                            g_user = User.objects.get(email=meeting.guest_mail_id)
+                            h_hist = UserMeetingHistory.objects.filter(user1=h_user, user2=g_user).first()
+                            g_hist = UserMeetingHistory.objects.filter(user1=g_user, user2=h_user).first()
+                            hist = h_hist or g_hist
+                            if hist:
+                                hist.script_count += 1
+                                hist.save()
+                            else:
+                                UserMeetingHistory.objects.create(
+                                    user1=h_user, user2=g_user, script_count=1,
+                                    last_meeting_url=meeting.meeting_url,
+                                    last_host=h_user, last_guest=g_user
+                                )
+                        except Exception: pass
+                        
+                        return JsonResponse({'success': True, 'next_script': True})
+                    else:
+                        meeting.status = 'completed'
+                        meeting.save()
+                        
+                        # Send email
+                        try:
+                            cat_name = link_db.topic.topic_name if (link_db and link_db.topic) else "Unknown"
+                            send_mail(
+                                f'Alert: No More Scripts for {cat_name}',
+                                f'Warning! Users have exhausted all scripts for the topic: {cat_name}.\n\nPlease upload more scripts immediately.',
+                                'noreply@biswastech.com',
+                                ['koushik271999@gmail.com'],
+                                fail_silently=True,
+                            )
+                        except Exception: pass
+                        
+                        return JsonResponse({'success': True, 'empty_redirect': True, 'error': 'No more scripts available for this category!'})
+                        
+                return JsonResponse({'success': True, 'waiting_partner': True})
         except MeetingDatabase.DoesNotExist:
             pass
     return JsonResponse({'success': False})
 
 @login_required
 def next_script_api(request):
-    if request.method == 'POST':
-        meeting_id = request.POST.get('meeting_id')
-        try:
-            meeting = MeetingDatabase.objects.get(meeting_id=meeting_id, host_mail_id=request.user.email)
-            # Check time diff for > 2 mins
-            now = timezone.now()
-            if meeting.last_script_change_time:
-                diff = (now - meeting.last_script_change_time).total_seconds()
-                if diff >= 120:
-                    meeting.valid_script_count += 1
-            
-            # Reset done flags
-            meeting.host_done_script = False
-            meeting.guest_done_script = False
-            
-            if meeting.valid_script_count >= 5:
-                meeting.status = 'completed'
-                meeting.save()
-                return JsonResponse({'success': False, 'empty_redirect': True, 'error': 'Great job! You have successfully completed 5 valid recordings. Redirecting to dashboard.'})
-
-            # Find a topic not played yet in the SAME category globally
-            current_category = meeting.topic.topic_name
-            available_topics = TopicDatabase.objects.filter(topic_name=current_category, is_done=False)
-            
-            if available_topics.exists():
-                new_topic = random.choice(available_topics)
-                new_topic.is_done = True
-                new_topic.save()
-                
-                meeting.topic = new_topic
-                meeting.last_script_change_time = now
-                if meeting.played_topic_ids_comma_separated:
-                    meeting.played_topic_ids_comma_separated += f",{new_topic.topic_id}"
-                else:
-                    meeting.played_topic_ids_comma_separated = new_topic.topic_id
-                meeting.save()
-                meeting.played_topics.add(meeting.topic)
-                
-                
-                # Update history script count
-                try:
-                    h_user = User.objects.get(email=meeting.host_mail_id)
-                    g_user = User.objects.get(email=meeting.guest_mail_id)
-                    h_hist = UserMeetingHistory.objects.filter(user1=h_user, user2=g_user).first()
-                    g_hist = UserMeetingHistory.objects.filter(user1=g_user, user2=h_user).first()
-                    hist = h_hist or g_hist
-                    if hist:
-                        hist.script_count += 1
-                        hist.save()
-                    else:
-                        UserMeetingHistory.objects.create(
-                            user1=h_user, user2=g_user, script_count=1,
-                            last_meeting_url=meeting.meeting_url,
-                            last_host=h_user, last_guest=g_user
-                        )
-                except Exception: pass
-                
-                return JsonResponse({'success': True})
-            else:
-                send_mail(
-                    f'Alert: No More Scripts for {current_category}',
-                    f'Warning! Users have exhausted all scripts for the topic: {current_category}.\n\nPlease upload more scripts for this category immediately.',
-                    'noreply@biswastech.com',
-                    ['koushik271999@gmail.com'],
-                    fail_silently=True,
-                )
-                return JsonResponse({'success': False, 'empty_redirect': True, 'error': f'No more scripts available for {current_category}.'})
-        except MeetingDatabase.DoesNotExist:
-            pass
-    return JsonResponse({'success': False})
+    return JsonResponse({'success': False, 'empty_redirect': True, 'error': 'Function deprecated'})

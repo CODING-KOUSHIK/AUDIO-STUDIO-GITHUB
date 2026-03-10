@@ -1,80 +1,52 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="dashboard-header" style="background: linear-gradient(135deg, var(--primary) 0%, #0056b3 100%); color: white; padding: 2.5rem 2rem; border-radius: 12px; box-shadow: 0 10px 20px rgba(0,0,0,0.1); margin-bottom: 2rem; position: relative; overflow: hidden;">
-    <div style="position: relative; z-index: 1;">
-        <h1 style="margin: 0 0 0.5rem 0; font-size: 2.2rem; font-weight: 700;">Welcome back, {{ user.name }}! 👋</h1>
-        <p style="margin: 0; font-size: 1.1rem; opacity: 0.9;">Ready for your next recording session?</p>
+<div style="background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); padding: 1.5rem; border-radius: 10px; margin-bottom: 2rem; border-left: 5px solid var(--primary); display: flex; justify-content: space-between; align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+    <div>
+        <h1 class="greeting" style="margin: 0; font-size: 1.8rem; color: #333;">Welcome, {{ user.name }}</h1>
+        <p style="margin: 0; color: #666; font-size: 0.95rem;">Ready for recording?</p>
     </div>
-    
-    <div class="balance-badge" style="position: absolute; top: 2.2rem; right: 2rem; background: rgba(255,255,255,0.2); backdrop-filter: blur(10px); padding: 0.8rem 1.5rem; border-radius: 50px; border: 1px solid rgba(255,255,255,0.3); font-size: 1.2rem; font-weight: 600; display: flex; align-items: center; gap: 8px;">
-        <span style="font-size: 1.4rem;">₹</span>{{ user.balance }}
-    </div>
-</div>
-
-<div class="dashboard-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
-    <!-- Info Card -->
-    <div class="dashboard-card" style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 4px solid var(--primary);">
-        <h3 style="color: #333; margin-top: 0; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px;">
-            <i class="fas fa-info-circle" style="color: var(--primary);"></i> Project Guidelines
-        </h3>
-        <p class="bengali-text" style="font-size: 1.2rem; line-height: 1.6; color: #555; margin-bottom: 0;">
-            এটি একটি সহজ বাংলা রেকর্ডিং প্রজেক্ট।<br>
-            আপনাকে স্ক্রিপ্ট দেখে পড়তে হবে।
-        </p>
-    </div>
-
-    <!-- Actions Card -->
-    <div class="dashboard-card" style="background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border-top: 4px solid #28a745; display: flex; flex-direction: column; justify-content: center;">
-        <div id="loading-mic" style="text-align: center; color: #666; font-style: italic;">
-            <i class="fas fa-spinner fa-spin"></i> Checking microphone permissions...
-        </div>
-        
-        <div id="mic-warning" class="alert alert-danger" style="display: none; margin: 0;">
-            <strong><i class="fas fa-microphone-slash"></i> Microphone Access Denied</strong><br>
-            Please allow microphone permission in your browser settings to continue.
-        </div>
-
-        <form method="POST" action="{% url 'start_recording' %}" style="text-align: center;">
-            {% csrf_token %}
-            {% if has_active_meeting %}
-            <a href="{% url 'recording_room' %}" id="reconnect-btn" class="btn btn-success"
-                style="font-size: 1.2rem; padding: 1rem 2rem; display: none; width: 100%; border-radius: 8px; box-shadow: 0 4px 10px rgba(40,167,69,0.3); transition: transform 0.2s; color: white; text-decoration: none;">
-                <i class="fas fa-plug"></i> Reconnect to Active Meeting
-            </a>
-            {% else %}
-            <button type="submit" id="start-btn" class="btn btn-primary"
-                style="font-size: 1.2rem; padding: 1rem 2rem; display: none; width: 100%; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,123,255,0.3); transition: transform 0.2s; border: none; cursor: pointer; color: white;">
-                <i class="fas fa-microphone"></i> Start Recording
-            </button>
-            {% endif %}
-        </form>
+    <div style="background: #2ea043; color: white; padding: 10px 20px; border-radius: 8px; font-weight: bold; font-size: 1.2rem; box-shadow: 0 4px 6px rgba(46,160,67,0.3);">
+        Balance: ₹{{ user.balance }}
     </div>
 </div>
 
-<div class="dashboard-actions" style="display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem;">
-    <a href="{% url 'payment_dashboard' %}" class="btn btn-outline" style="background: #f8f9fa; color: #333; border: 1px solid #ddd; padding: 0.8rem 1.5rem; border-radius: 8px; font-weight: 600; text-decoration: none; display: flex; align-items: center; gap: 8px; transition: all 0.2s;">
-        <i class="fas fa-wallet" style="color: #28a745;"></i> Payment Dashboard
+<div style="margin-bottom: 25px;">
+    <a href="{% url 'payment_dashboard' %}" class="btn btn-secondary"
+        style="background-color: #17a2b8; border: none; padding: 0.8rem 1.5rem; font-weight: 500; display: inline-flex; align-items: center; gap: 8px;">
+        <i class="fas fa-wallet"></i> Payment Dashboard
     </a>
 </div>
 
-<div style="background: #fff3cd; color: #856404; border-left: 5px solid #ffc107; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05);">
-    <h4 style="margin-top: 0; display: flex; align-items: center; gap: 10px;">
-        <i class="fas fa-exclamation-triangle"></i> Important Warning
-    </h4>
-    <p style="margin: 0; font-size: 1.1rem; line-height: 1.5;">
-        Phone screen must stay <strong>ON</strong> during recording.<br>
-        <span class="bengali-text">ফোনের লাইট নিভতে দেওয়া যাবে না।</span>
-    </p>
+<div class="bengali-text" style="background: #fff; padding: 1.5rem; border-radius: 8px; border: 1px solid #ddd; margin-bottom: 25px; line-height: 1.6; color: #444;">
+    এটি একটি সহজ বাংলা রেকর্ডিং প্রজেক্ট।<br>
+    আপনাকে স্ক্রিপ্ট দেখে পড়তে হবে।
+</div>
+
+<div id="mic-warning" class="alert alert-danger" style="display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+    <strong>⚠ Microphone Denied:</strong> Please allow microphone permission to continue recording.
+</div>
+
+<form method="POST" action="{% url 'start_recording' %}" style="text-align: center;">
+    {% csrf_token %}
+    <button type="submit" id="start-btn" class="btn btn-primary"
+        style="font-size: 1.4rem; padding: 1rem 3rem; display: none; border-radius: 50px; box-shadow: 0 4px 15px rgba(0,123,255,0.4); border: none; transition: transform 0.2s;">
+        Start Recording
+    </button>
+</form>
+
+<div id="loading-mic" class="alert alert-secondary" style="text-align: center; margin-top: 1rem;">
+    Checking microphone permissions... <i class="fas fa-spinner fa-spin"></i>
+</div>
+
+<div class="alert alert-warning" style="margin-top: 2.5rem; border-left: 5px solid #ffc107;">
+    <strong style="color: #856404;">⚠ Warning:</strong><br>
+    Phone screen must stay ON during recording.<br>
+    ফোনের লাইট নিভতে দেওয়া যাবে না।
 </div>
 
 <style>
-    .btn-primary:hover, .btn-success:hover { transform: translateY(-2px); }
-    .btn-outline:hover { background: #e9ecef !important; }
-    @media (max-width: 768px) {
-        .balance-badge { position: relative !important; top: 0 !important; right: 0 !important; margin-top: 1rem; display: inline-flex !important; }
-        .dashboard-grid { grid-template-columns: 1fr; }
-    }
+    .btn-primary:hover { transform: translateY(-2px); }
 </style>
 {% endblock %}
 

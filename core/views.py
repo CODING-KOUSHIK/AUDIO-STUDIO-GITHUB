@@ -161,6 +161,9 @@ def dashboard(request):
                 link.is_used = False
                 link.save()
             except: pass
+            if active.topic:
+                active.topic.is_done = False
+                active.topic.save()
 
     meetings = []
     if request.user.is_staff:
@@ -285,10 +288,10 @@ def meeting_status_api(request):
         partner_disconnected = False
         if meeting.status == 'paired':
             other_heartbeat = meeting.guest_last_heartbeat if is_host else meeting.host_last_heartbeat
-            time_since_creation = (now_time - meeting.created_at).total_seconds()
-            disconnected_time = (now_time - other_heartbeat).total_seconds() if other_heartbeat else time_since_creation
+            time_since_pairing = (now_time - meeting.last_script_change_time).total_seconds() if meeting.last_script_change_time else 0
+            disconnected_time = (now_time - other_heartbeat).total_seconds() if other_heartbeat else time_since_pairing
             
-            if time_since_creation < 60:
+            if time_since_pairing < 60:
                 if disconnected_time > 15:
                     meeting.status = 'expired'
                     meeting.save()
@@ -299,6 +302,9 @@ def meeting_status_api(request):
                             link.save()
                         except StudioLinkDatabase.DoesNotExist:
                             pass
+                        if meeting.topic:
+                            meeting.topic.is_done = False
+                            meeting.topic.save()
                     return JsonResponse({'status': 'expired', 'error': 'Your partner joined and left the room.'})
             else:
                 if disconnected_time > 20:
@@ -314,6 +320,9 @@ def meeting_status_api(request):
                             link.save()
                         except StudioLinkDatabase.DoesNotExist:
                             pass
+                        if meeting.topic:
+                            meeting.topic.is_done = False
+                            meeting.topic.save()
                     return JsonResponse({'status': 'expired', 'error': 'Partner disconnected for too long'})
 
         if meeting.status == 'searching':
@@ -328,7 +337,7 @@ def meeting_status_api(request):
                     if meeting.status != 'searching':
                         return JsonResponse({'status': meeting.status, 'joined_meeting_id': meeting.joined_meeting_id})
                         
-                    candidates = MeetingDatabase.objects.filter(status='searching').exclude(meeting_id=meeting.meeting_id).select_for_update()
+                    candidates = MeetingDatabase.objects.filter(status='searching').exclude(meeting_id=meeting.meeting_id).order_by('created_at').select_for_update()
                     valid_candidates = list(candidates)
                     
                     if valid_candidates:
@@ -392,18 +401,19 @@ def meeting_status_api(request):
                             if available_link:
                                 available_link.is_used = True
                                 available_link.save()
-                                meeting.status = 'paired'
-                                meeting.guest_mail_id = matched_candidate.host_mail_id
-                                meeting.guest_name = matched_candidate.host_name
-                                meeting.guest_age = matched_candidate.host_age
-                                meeting.guest_gender = matched_candidate.host_gender
-                                meeting.guest_dist = matched_candidate.host_dist
-                                meeting.studio_host_email = available_link.email1
-                                meeting.studio_guest_email = available_link.email2
-                                meeting.meeting_url = available_link.meeting_url
                                 
-                                matched_candidate.status = 'joined_other'
-                                matched_candidate.joined_meeting_id = str(meeting.meeting_id)
+                                matched_candidate.status = 'paired'
+                                matched_candidate.guest_mail_id = meeting.host_mail_id
+                                matched_candidate.guest_name = meeting.host_name
+                                matched_candidate.guest_age = meeting.host_age
+                                matched_candidate.guest_gender = meeting.host_gender
+                                matched_candidate.guest_dist = meeting.host_dist
+                                matched_candidate.studio_host_email = available_link.email1
+                                matched_candidate.studio_guest_email = available_link.email2
+                                matched_candidate.meeting_url = available_link.meeting_url
+                                
+                                meeting.status = 'joined_other'
+                                meeting.joined_meeting_id = str(matched_candidate.meeting_id)
                                 assigned_url = available_link.meeting_url
                             else:
                                 return JsonResponse({'status': 'searching'})
@@ -526,6 +536,9 @@ def leave_meeting_api(request):
                         link.save()
                     except StudioLinkDatabase.DoesNotExist:
                         pass
+                    if meeting.topic:
+                        meeting.topic.is_done = False
+                        meeting.topic.save()
                         
             return JsonResponse({'success': True})
         except MeetingDatabase.DoesNotExist:

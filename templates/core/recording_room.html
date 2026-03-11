@@ -198,12 +198,11 @@
                     }
                     startRefreshTimer();
                 } else if (data.status === 'timeout' || data.status === 'expired' || data.status === 'completed') {
-                    // Meeting ended
-                    document.getElementById('wait-section').style.display = 'none';
-                    document.getElementById('paired-section').style.display = 'none';
-                    document.getElementById('expired-section').style.display = 'block';
                     clearInterval(checkInterval);
                     if (data.status === 'timeout') {
+                        document.getElementById('wait-section').style.display = 'none';
+                        document.getElementById('paired-section').style.display = 'none';
+                        document.getElementById('expired-section').style.display = 'block';
                         document.getElementById('expired-section').innerHTML = `<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Currently no users are here</h2><p>Please search after 15 minutes.</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
                     } else if (data.error) {
                         let headerTxt = "Meeting Ended";
@@ -212,7 +211,25 @@
                             headerTxt = "Meeting Completed";
                             alertClass = "alert-success";
                         }
-                        document.getElementById('expired-section').innerHTML = `<div class="alert ${alertClass}" style="margin-top: 2rem;"><h2>${headerTxt}</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
+                        
+                        // Do not hide the paired-section automatically, just show the notification inside it
+                        if (currentStatus === 'paired') {
+                            const notifDiv = document.createElement('div');
+                            notifDiv.className = `alert ${alertClass}`;
+                            notifDiv.innerHTML = `<h2>${headerTxt}</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a>`;
+                            document.querySelector('.meeting-info').prepend(notifDiv);
+                            
+                            // Let the user know the partner disconnected if it was expired
+                            if (data.status === 'expired') {
+                                const partnerDisplay = document.getElementById('partner-name-display');
+                                if(partnerDisplay) partnerDisplay.innerHTML = '<span style="color:var(--danger);font-weight:bold;">Your partner left the room. You can continue or leave.</span>';
+                            }
+                        } else {
+                            document.getElementById('wait-section').style.display = 'none';
+                            document.getElementById('paired-section').style.display = 'none';
+                            document.getElementById('expired-section').style.display = 'block';
+                            document.getElementById('expired-section').innerHTML = `<div class="alert ${alertClass}" style="margin-top: 2rem;"><h2>${headerTxt}</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
+                        }
                     }
                 }
 

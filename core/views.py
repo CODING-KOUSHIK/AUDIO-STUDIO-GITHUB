@@ -365,8 +365,8 @@ def meeting_status_api(request):
             err_msg = "Your partner joined and left the room, or the meeting ended."
             
             if meeting.status == 'completed':
-                if meeting.valid_script_count >= 5:
-                    err_msg = "Congratulations! You have successfully recorded the maximum allowed 5 scripts in this session."
+                if meeting.valid_script_count >= 30:
+                    err_msg = "Congratulations! You have successfully recorded the maximum allowed 30 scripts in this session."
                 else:
                     err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
             elif not meeting.topic and meeting.status == 'expired':
@@ -561,7 +561,7 @@ def meeting_status_api(request):
             return JsonResponse({'status': meeting.status, 'joined_meeting_id': meeting.joined_meeting_id})
 
         script_html = ''
-        topic_id = None
+        topic_id = 'NO_TOPIC'
         if meeting.topic:
             topic_id = meeting.topic.topic_id
             
@@ -601,6 +601,10 @@ def meeting_status_api(request):
                         formatted_lines.append(f'<div>{line}</div>')
                         
                 script_html = "".join(formatted_lines)
+        else:
+            # When topic is None
+            if meeting.status not in ['expired', 'completed']:
+                script_html = '<h3 style="color:var(--danger);text-align:center;">Script is not available you can continue your own way, just 3 min er moddhe korte hobe</h3>'
 
         script_count = meeting.played_topics.count()
         # Fallback to 1 if count is somehow 0 but topic exists
@@ -722,10 +726,10 @@ def done_script_api(request):
                     meeting.host_done_script = False
                     meeting.guest_done_script = False
                     
-                    if meeting.valid_script_count >= 5:
+                    if meeting.valid_script_count >= 30:
                         meeting.status = 'completed'
                         meeting.save()
-                        return JsonResponse({'success': True, 'completed': True, 'msg': 'Max 5 scripts done!'})
+                        return JsonResponse({'success': True, 'completed': True, 'msg': 'Max 30 scripts done!'})
                         
                     now = timezone.now()
                     
@@ -769,7 +773,8 @@ def done_script_api(request):
                         
                         return JsonResponse({'success': True, 'next_script': True})
                     else:
-                        meeting.status = 'completed'
+                        meeting.topic = None
+                        meeting.last_script_change_time = now
                         meeting.save()
                         
                         # Send email
@@ -784,7 +789,7 @@ def done_script_api(request):
                             )
                         except Exception: pass
                         
-                        return JsonResponse({'success': True, 'empty_redirect': True, 'error': 'No more scripts available for this category!'})
+                        return JsonResponse({'success': True, 'next_script': True})
                         
                 return JsonResponse({'success': True, 'waiting_partner': True})
         except MeetingDatabase.DoesNotExist:

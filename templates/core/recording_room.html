@@ -118,7 +118,7 @@
 <div id="expired-section" style="display: none;">
     <div class="alert alert-danger" style="margin-top: 2rem;">
         <h2>Meeting Ended</h2>
-        <p style="color: inherit;" id="expired-error-msg">Your partner joined and left the meeting, or the meeting expired.</p>
+        <p style="color: inherit;" id="expired-error-msg">Something went wrong! No script available for this topic. Please go to the dashboard and search another partner</p>
         <a href="{% url 'dashboard' %}" class="btn btn-outline"
             style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a>
     </div>
@@ -235,7 +235,7 @@
                         document.getElementById('single-done-msg').style.display = 'none';
                         document.getElementById('both-done-msg').style.display = 'block';
                         document.getElementById('next-script-btn').style.display = 'inline-block';
-                        document.querySelector('.recording-iframe-container').style.height = '75vh';
+                        document.querySelector('.recording-iframe-container').style.height = '85vh';
                     }
                 }
             })
@@ -341,7 +341,7 @@
         const doneBtn = document.getElementById('done-script-btn');
         doneBtn.style.display = 'none';
         document.getElementById('single-done-msg').style.display = 'block';
-        document.querySelector('.recording-iframe-container').style.height = '75vh';
+        document.querySelector('.recording-iframe-container').style.height = '85vh';
 
         fetch('/api/done-script/', {
             method: 'POST',

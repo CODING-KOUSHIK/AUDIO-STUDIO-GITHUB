@@ -306,7 +306,7 @@ def start_recording(request):
                     matched_candidate.save()
                     meeting.status = 'expired'
                     meeting.save()
-                    msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
+                    msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
                     
                     try:
                         cat_name = link_db.topic_category if (link_db and link_db.topic_category) else "Unknown"
@@ -364,7 +364,7 @@ def meeting_status_api(request):
         if meeting.status in ['expired', 'completed']:
             err_msg = "Your partner joined and left the room, or the meeting ended."
             if not meeting.topic and meeting.status == 'expired':
-                err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
+                err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
             return JsonResponse({'status': meeting.status, 'error': err_msg})
 
         # Check partner disconnect if paired

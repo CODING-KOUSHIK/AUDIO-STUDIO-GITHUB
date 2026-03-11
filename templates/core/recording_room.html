@@ -222,7 +222,7 @@
                 }
 
                 // Check if script changed dynamically (i.e., BOTH users finished last script)
-                if (data.topic_id && data.topic_id !== currentTopicId) {
+                if (data.topic_id && currentTopicId !== null && data.topic_id !== currentTopicId) {
                     currentTopicId = data.topic_id;
                     
                     window.pendingScriptHtml = data.script_html;
@@ -235,6 +235,7 @@
                         document.getElementById('single-done-msg').style.display = 'none';
                         document.getElementById('both-done-msg').style.display = 'block';
                         document.getElementById('next-script-btn').style.display = 'inline-block';
+                        document.querySelector('.recording-iframe-container').style.height = '75vh';
                     }
                 }
             })
@@ -288,6 +289,7 @@
 
                     document.getElementById('get-script-btn').style.display = 'none';
                     document.getElementById('confirm-section').style.display = 'block';
+                    document.querySelector('.recording-iframe-container').style.height = '52vh';
                     resetDoneButton();
                 } else {
                     alert("Script not available. Please go back and join again.");
@@ -339,6 +341,7 @@
         const doneBtn = document.getElementById('done-script-btn');
         doneBtn.style.display = 'none';
         document.getElementById('single-done-msg').style.display = 'block';
+        document.querySelector('.recording-iframe-container').style.height = '75vh';
 
         fetch('/api/done-script/', {
             method: 'POST',
@@ -362,6 +365,7 @@
 
             scriptBox.innerHTML = window.pendingScriptHtml;
             scriptBox.style.display = 'block';
+            document.querySelector('.recording-iframe-container').style.height = '52vh';
 
             if (window.pendingScriptNumber) {
                 document.getElementById('script-title').innerText = `Script ${window.pendingScriptNumber}`;

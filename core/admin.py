@@ -26,12 +26,22 @@ class StudioLinkDatabaseAdmin(admin.ModelAdmin):
 @admin.register(MeetingDatabase)
 class MeetingDatabaseAdmin(admin.ModelAdmin):
     list_display = (
-        'meeting_id', 'status', 'meeting_url', 'topic', 'host_name', 'host_age', 'host_gender', 'get_host_location',
+        'meeting_id', 'status', 'valid_script_count', 'meeting_url', 'topic', 'host_name', 'host_age', 'host_gender', 'get_host_location',
         'guest_name', 'guest_age', 'guest_gender', 'get_guest_location'
     )
     list_display_links = ('meeting_id', 'meeting_url')
     list_filter = ('status', 'created_at')
     search_fields = ('meeting_id', 'meeting_url', 'host_name', 'guest_name', 'host_mail_id', 'guest_mail_id')
+    actions = ['make_studio_link_not_used']
+
+    @admin.action(description='Make associated Studio Links Not Used for selected Meetings')
+    def make_studio_link_not_used(self, request, queryset):
+        urls = [m.meeting_url for m in queryset if m.meeting_url]
+        if urls:
+            updated = StudioLinkDatabase.objects.filter(meeting_url__in=urls).update(is_used=False)
+            self.message_user(request, f'{updated} associated studio links were marked as Not Used.')
+        else:
+            self.message_user(request, 'No valid URLs found in selected meetings.')
 
     def get_host_location(self, obj):
         return obj.host_dist

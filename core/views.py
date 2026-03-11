@@ -296,9 +296,25 @@ def start_recording(request):
                     matched_candidate.played_topic_ids_comma_separated = selected_topic.topic_id
                     matched_candidate.save()
                     matched_candidate.played_topics.add(matched_candidate.topic)
-                
-                matched_candidate.save()
-                meeting.save()
+                    matched_candidate.save()
+                    meeting.save()
+                else:
+                    if link_db:
+                        link_db.is_used = False
+                        link_db.save()
+                    matched_candidate.status = 'expired'
+                    matched_candidate.save()
+                    meeting.status = 'expired'
+                    meeting.save()
+                    msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
+                    
+                    try:
+                        cat_name = link_db.topic_category if (link_db and link_db.topic_category) else "Unknown"
+                        from django.core.mail import send_mail
+                        send_mail(f'Alert: No More Scripts for {cat_name}', msg, 'noreply@biswastech.com', ['koushik271999@gmail.com'], fail_silently=True)
+                    except: pass
+                    
+                    return render(request, 'core/meeting_error.html', {'error': msg})
 
         request.session['current_meeting'] = str(new_meeting.meeting_id)
 
@@ -344,6 +360,12 @@ def meeting_status_api(request):
         else:
             meeting.guest_last_heartbeat = now_time
         meeting.save()
+
+        if meeting.status in ['expired', 'completed']:
+            err_msg = "Your partner joined and left the room, or the meeting ended."
+            if not meeting.topic and meeting.status == 'expired':
+                err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
+            return JsonResponse({'status': meeting.status, 'error': err_msg})
 
         # Check partner disconnect if paired
         partner_disconnected = False
@@ -507,8 +529,23 @@ def meeting_status_api(request):
                             paired_meeting.played_topic_ids_comma_separated = selected_topic.topic_id
                             paired_meeting.save()
                             paired_meeting.played_topics.add(paired_meeting.topic)
-                        
-                        paired_meeting.save()
+                            paired_meeting.save()
+                        else:
+                            paired_meeting.status = 'expired'
+                            if assigned_url:
+                                try:
+                                    link = StudioLinkDatabase.objects.get(meeting_url=assigned_url)
+                                    link.is_used = False
+                                    link.save()
+                                except StudioLinkDatabase.DoesNotExist: pass
+                            paired_meeting.save()
+                            
+                            try:
+                                cat_name = link_db.topic_category if (link_db and link_db.topic_category) else "Unknown"
+                                from django.core.mail import send_mail
+                                send_mail(f'Alert: No More Scripts for {cat_name}', 'No script available.', 'noreply@biswastech.com', ['koushik271999@gmail.com'], fail_silently=True)
+                            except: pass
+
                         if matched_candidate != paired_meeting:
                             matched_candidate.save()
                         if meeting != paired_meeting:
@@ -535,13 +572,13 @@ def meeting_status_api(request):
                         formatted_lines.append('<br>')
                         continue
                     
-                if re.match(r'(?i)^Host\s*:', line):
-                    current_speaker = 'host'
-                    line = re.sub(r'(?i)^Host\s*:', f'<b>{meeting.host_name}</b>:', line)
-                elif re.match(r'(?i)^Guest\s*:', line):
-                    current_speaker = 'guest'
-                    h_name = meeting.guest_name if meeting.guest_name else "Guest"
-                    line = re.sub(r'(?i)^Guest\s*:', f'<b>{h_name}</b>:', line)
+                    if re.match(r'(?i)^Host\s*:', line):
+                        current_speaker = 'host'
+                        line = re.sub(r'(?i)^Host\s*:', f'<b>{meeting.host_name}</b>:', line)
+                    elif re.match(r'(?i)^Guest\s*:', line):
+                        current_speaker = 'guest'
+                        h_name = meeting.guest_name if meeting.guest_name else "Guest"
+                        line = re.sub(r'(?i)^Guest\s*:', f'<b>{h_name}</b>:', line)
                 
                     if current_speaker == 'host':
                         if is_host:

@@ -1,0 +1,59 @@
+﻿commit 54a1b31b1c9b419e2483e5109a36839161bb948c
+Author: KOUSHIK   BISWAS <koushikbiswas026@gmail.com>
+Date:   Thu Mar 12 01:06:51 2026 +0530
+
+    Update fallback dashboard error text and increase iframe size
+
+diff --git a/core/views.py b/core/views.py
+index 59940fb..bbe658e 100644
+--- a/core/views.py
++++ b/core/views.py
+@@ -306,7 +306,7 @@ def start_recording(request):
+                     matched_candidate.save()
+                     meeting.status = 'expired'
+                     meeting.save()
+-                    msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
++                    msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
+                     
+                     try:
+                         cat_name = link_db.topic_category if (link_db and link_db.topic_category) else "Unknown"
+@@ -364,7 +364,7 @@ def meeting_status_api(request):
+         if meeting.status in ['expired', 'completed']:
+             err_msg = "Your partner joined and left the room, or the meeting ended."
+             if not meeting.topic and meeting.status == 'expired':
+-                err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner and send me a mail: koushik271999@gmail.com"
++                err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
+             return JsonResponse({'status': meeting.status, 'error': err_msg})
+ 
+         # Check partner disconnect if paired
+diff --git a/templates/core/recording_room.html b/templates/core/recording_room.html
+index 65d5744..c614408 100644
+--- a/templates/core/recording_room.html
++++ b/templates/core/recording_room.html
+@@ -118,7 +118,7 @@
+ <div id="expired-section" style="display: none;">
+     <div class="alert alert-danger" style="margin-top: 2rem;">
+         <h2>Meeting Ended</h2>
+-        <p style="color: inherit;" id="expired-error-msg">Your partner joined and left the meeting, or the meeting expired.</p>
++        <p style="color: inherit;" id="expired-error-msg">Something went wrong! No script available for this topic. Please go to the dashboard and search another partner</p>
+         <a href="{% url 'dashboard' %}" class="btn btn-outline"
+             style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a>
+     </div>
+@@ -235,7 +235,7 @@
+                         document.getElementById('single-done-msg').style.display = 'none';
+                         document.getElementById('both-done-msg').style.display = 'block';
+                         document.getElementById('next-script-btn').style.display = 'inline-block';
+-                        document.querySelector('.recording-iframe-container').style.height = '75vh';
++                        document.querySelector('.recording-iframe-container').style.height = '85vh';
+                     }
+                 }
+             })
+@@ -341,7 +341,7 @@
+         const doneBtn = document.getElementById('done-script-btn');
+         doneBtn.style.display = 'none';
+         document.getElementById('single-done-msg').style.display = 'block';
+-        document.querySelector('.recording-iframe-container').style.height = '75vh';
++        document.querySelector('.recording-iframe-container').style.height = '85vh';
+ 
+         fetch('/api/done-script/', {
+             method: 'POST',

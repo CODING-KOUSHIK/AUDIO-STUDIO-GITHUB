@@ -363,8 +363,15 @@ def meeting_status_api(request):
 
         if meeting.status in ['expired', 'completed']:
             err_msg = "Your partner joined and left the room, or the meeting ended."
-            if not meeting.topic and meeting.status == 'expired':
+            
+            if meeting.status == 'completed':
+                if meeting.valid_script_count >= 5:
+                    err_msg = "Congratulations! You have successfully recorded the maximum allowed 5 scripts in this session."
+                else:
+                    err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
+            elif not meeting.topic and meeting.status == 'expired':
                 err_msg = "Something went wrong! No script available for this topic. Please go to the dashboard and search another partner"
+                
             return JsonResponse({'status': meeting.status, 'error': err_msg})
 
         # Check partner disconnect if paired

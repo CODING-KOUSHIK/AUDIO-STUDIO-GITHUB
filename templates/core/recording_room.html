@@ -205,8 +205,14 @@
                     clearInterval(checkInterval);
                     if (data.status === 'timeout') {
                         document.getElementById('expired-section').innerHTML = `<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Currently no users are here</h2><p>Please search after 15 minutes.</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
-                    } else if (data.status === 'expired' && data.error) {
-                        document.getElementById('expired-section').innerHTML = `<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Meeting Ended</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
+                    } else if (data.error) {
+                        let headerTxt = "Meeting Ended";
+                        let alertClass = "alert-danger";
+                        if (data.status === 'completed' && !data.error.includes("went wrong")) {
+                            headerTxt = "Meeting Completed";
+                            alertClass = "alert-success";
+                        }
+                        document.getElementById('expired-section').innerHTML = `<div class="alert ${alertClass}" style="margin-top: 2rem;"><h2>${headerTxt}</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
                     }
                 }
 

@@ -16,6 +16,12 @@ class StudioLinkDatabaseAdmin(admin.ModelAdmin):
     list_display = ('name_id', 'email1', 'email2', 'is_used')
     list_filter = ('is_used',)
     search_fields = ('name_id', 'email1', 'email2')
+    actions = ['mark_as_not_used']
+
+    @admin.action(description='Mark selected links as Not Used')
+    def mark_as_not_used(self, request, queryset):
+        updated = queryset.update(is_used=False)
+        self.message_user(request, f'{updated} studio links were successfully marked as Not Used.')
 
 @admin.register(MeetingDatabase)
 class MeetingDatabaseAdmin(admin.ModelAdmin):

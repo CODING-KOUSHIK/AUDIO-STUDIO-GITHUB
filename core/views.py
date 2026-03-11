@@ -228,19 +228,80 @@ def start_recording(request):
     old_searching = MeetingDatabase.objects.filter(status='searching', created_at__lt=timezone.now() - timezone.timedelta(seconds=130))
     old_searching.update(status='timeout')
 
+    # Auto-release old USED links if they haven't been touched in 1 hour
+    one_hour_ago = timezone.now() - timezone.timedelta(hours=1)
+    StudioLinkDatabase.objects.filter(is_used=True, last_used_time__lt=one_hour_ago).update(is_used=False)
+
     # Remove any existing meeting tracking to start fresh
     if 'current_meeting' in request.session:
         del request.session['current_meeting']
 
-    new_meeting = MeetingDatabase.objects.create(
-        host_mail_id=request.user.email,
-        host_name=request.user.name,
-        host_age=request.user.date_of_birth.year if request.user.date_of_birth else None,
-        host_gender=request.user.gender,
-        host_dist=request.user.district,
-        status='searching'
-    )
-    request.session['current_meeting'] = str(new_meeting.meeting_id)
+    with transaction.atomic():
+        new_meeting = MeetingDatabase.objects.create(
+            host_mail_id=request.user.email,
+            host_name=request.user.name,
+            host_age=request.user.date_of_birth.year if request.user.date_of_birth else None,
+            host_gender=request.user.gender,
+            host_dist=request.user.district,
+            status='searching'
+        )
+        
+        candidates = MeetingDatabase.objects.filter(status='searching').exclude(meeting_id=new_meeting.meeting_id).order_by('created_at').select_for_update()
+        valid_candidates = list(candidates)
+        
+        if not valid_candidates:
+            available_link = StudioLinkDatabase.objects.filter(is_used=False).first()
+            if available_link:
+                available_link.is_used = True
+                available_link.last_used_time = timezone.now()
+                available_link.save()
+                
+                new_meeting.meeting_url = available_link.meeting_url
+                new_meeting.studio_host_email = available_link.email1
+                new_meeting.studio_guest_email = available_link.email2
+                new_meeting.save()
+        else:
+            meeting = new_meeting
+            matched_candidate = valid_candidates[0]
+            
+            matched_candidate.status = 'paired'
+            matched_candidate.guest_mail_id = meeting.host_mail_id
+            matched_candidate.guest_name = meeting.host_name
+            matched_candidate.guest_age = meeting.host_age
+            matched_candidate.guest_gender = meeting.host_gender
+            matched_candidate.guest_dist = meeting.host_dist
+            
+            meeting.status = 'joined_other'
+            meeting.joined_meeting_id = str(matched_candidate.meeting_id)
+            
+            assigned_url = matched_candidate.meeting_url
+                    
+            if assigned_url:
+                link_db = StudioLinkDatabase.objects.filter(meeting_url=assigned_url).first()
+                if link_db and link_db.topic_category:
+                    topics = list(TopicDatabase.objects.filter(is_done=False, topic_name=link_db.topic_category))
+                else:
+                    topics = list(TopicDatabase.objects.filter(is_done=False))
+                    
+                if not topics and link_db and link_db.topic_category:
+                    topics = list(TopicDatabase.objects.filter(is_done=False))
+
+                if topics:
+                    selected_topic = random.choice(topics)
+                    selected_topic.is_done = True
+                    selected_topic.save()
+                    matched_candidate.topic = selected_topic
+                    matched_candidate.last_script_change_time = timezone.now()
+                    matched_candidate.valid_script_count = 0
+                    matched_candidate.played_topic_ids_comma_separated = selected_topic.topic_id
+                    matched_candidate.save()
+                    matched_candidate.played_topics.add(matched_candidate.topic)
+                
+                matched_candidate.save()
+                meeting.save()
+
+        request.session['current_meeting'] = str(new_meeting.meeting_id)
+
     return redirect('recording_room')
 
 @login_required
@@ -291,8 +352,8 @@ def meeting_status_api(request):
             time_since_pairing = (now_time - meeting.last_script_change_time).total_seconds() if meeting.last_script_change_time else 0
             disconnected_time = (now_time - other_heartbeat).total_seconds() if other_heartbeat else time_since_pairing
             
-            if time_since_pairing < 60:
-                if disconnected_time > 15:
+            if time_since_pairing < 120:
+                if disconnected_time > 45:
                     meeting.status = 'expired'
                     meeting.save()
                     if meeting.valid_script_count == 0 and meeting.meeting_url:
@@ -307,7 +368,7 @@ def meeting_status_api(request):
                             meeting.topic.save()
                     return JsonResponse({'status': 'expired', 'error': 'Your partner joined and left the room.'})
             else:
-                if disconnected_time > 20:
+                if disconnected_time > 45:
                     partner_disconnected = True
                 
                 if disconnected_time > 600:
@@ -380,6 +441,8 @@ def meeting_status_api(request):
                                 if link_db:
                                     meeting.studio_host_email = link_db.email1
                                     meeting.studio_guest_email = link_db.email2
+                                    link_db.last_used_time = timezone.now()
+                                    link_db.save()
                                 matched_candidate.status = 'joined_other'
                                 matched_candidate.joined_meeting_id = str(meeting.meeting_id)
                             else:
@@ -393,6 +456,8 @@ def meeting_status_api(request):
                                 if link_db:
                                     matched_candidate.studio_host_email = link_db.email1
                                     matched_candidate.studio_guest_email = link_db.email2
+                                    link_db.last_used_time = timezone.now()
+                                    link_db.save()
                                 meeting.status = 'joined_other'
                                 meeting.joined_meeting_id = str(matched_candidate.meeting_id)
                             assigned_url = best_history.last_meeting_url
@@ -400,6 +465,7 @@ def meeting_status_api(request):
                             available_link = StudioLinkDatabase.objects.filter(is_used=False).first()
                             if available_link:
                                 available_link.is_used = True
+                                available_link.last_used_time = timezone.now()
                                 available_link.save()
                                 
                                 matched_candidate.status = 'paired'
@@ -454,16 +520,20 @@ def meeting_status_api(request):
         topic_id = None
         if meeting.topic:
             topic_id = meeting.topic.topic_id
-            raw_script = meeting.topic.script
-            lines = raw_script.split('\n')
-            formatted_lines = []
-            current_speaker = None
-            is_host = (request.user.email == meeting.host_mail_id)
             
-            for line in lines:
-                if not line.strip():
-                    formatted_lines.append('<br>')
-                    continue
+            # Skip generating the entire script HTML if the client already has it
+            client_topic_id = request.GET.get('topic_id')
+            if str(client_topic_id) != str(topic_id):
+                raw_script = meeting.topic.script
+                lines = raw_script.split('\n')
+                formatted_lines = []
+                current_speaker = None
+                is_host = (request.user.email == meeting.host_mail_id)
+                
+                for line in lines:
+                    if not line.strip():
+                        formatted_lines.append('<br>')
+                        continue
                     
                 if re.match(r'(?i)^Host\s*:', line):
                     current_speaker = 'host'
@@ -473,20 +543,20 @@ def meeting_status_api(request):
                     h_name = meeting.guest_name if meeting.guest_name else "Guest"
                     line = re.sub(r'(?i)^Guest\s*:', f'<b>{h_name}</b>:', line)
                 
-                if current_speaker == 'host':
-                    if is_host:
-                        formatted_lines.append(f'<div class="highlight-me">{line}</div>')
+                    if current_speaker == 'host':
+                        if is_host:
+                            formatted_lines.append(f'<div class="highlight-me">{line}</div>')
+                        else:
+                            formatted_lines.append(f'<div class="highlight-other">{line}</div>')
+                    elif current_speaker == 'guest':
+                        if is_host:
+                            formatted_lines.append(f'<div class="highlight-other">{line}</div>')
+                        else:
+                            formatted_lines.append(f'<div class="highlight-me">{line}</div>')
                     else:
-                        formatted_lines.append(f'<div class="highlight-other">{line}</div>')
-                elif current_speaker == 'guest':
-                    if is_host:
-                        formatted_lines.append(f'<div class="highlight-other">{line}</div>')
-                    else:
-                        formatted_lines.append(f'<div class="highlight-me">{line}</div>')
-                else:
-                    formatted_lines.append(f'<div>{line}</div>')
-                    
-            script_html = "".join(formatted_lines)
+                        formatted_lines.append(f'<div>{line}</div>')
+                        
+                script_html = "".join(formatted_lines)
 
         script_count = meeting.played_topics.count()
         # Fallback to 1 if count is somehow 0 but topic exists
@@ -608,10 +678,10 @@ def done_script_api(request):
                     meeting.host_done_script = False
                     meeting.guest_done_script = False
                     
-                    if meeting.valid_script_count >= 30:
+                    if meeting.valid_script_count >= 5:
                         meeting.status = 'completed'
                         meeting.save()
-                        return JsonResponse({'success': True, 'completed': True, 'msg': 'Max 30 scripts done!'})
+                        return JsonResponse({'success': True, 'completed': True, 'msg': 'Max 5 scripts done!'})
                         
                     now = timezone.now()
                     

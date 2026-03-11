@@ -85,6 +85,7 @@ class StudioLinkDatabase(models.Model):
     meeting_url = models.URLField(max_length=500)
     is_used = models.BooleanField(default=False)
     topic_category = models.CharField(max_length=255, choices=TOPIC_CHOICES, null=True, blank=True, help_text="Select the topic category for this studio link")
+    last_used_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return self.name_id

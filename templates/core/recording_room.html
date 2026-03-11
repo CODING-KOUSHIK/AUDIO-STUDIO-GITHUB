@@ -175,7 +175,7 @@
     }
 
     function checkStatus() {
-        fetch(`/api/meeting-status/?meeting_id=${meetingId}`)
+        fetch(`/api/meeting-status/?meeting_id=${meetingId}&topic_id=${currentTopicId || ''}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'joined_other') {
@@ -187,6 +187,12 @@
                     currentStatus = 'paired';
                     document.getElementById('wait-section').style.display = 'none';
                     document.getElementById('paired-section').style.display = 'block';
+                    if (data.meeting_url) {
+                        document.getElementById('studio-iframe').src = data.meeting_url;
+                    }
+                    if (data.user_studio_email) {
+                        document.getElementById('popup-user-email').innerText = data.user_studio_email;
+                    }
                     if (!hasShownPopup) {
                         hasShownPopup = true;
                     }
@@ -198,10 +204,7 @@
                     document.getElementById('expired-section').style.display = 'block';
                     clearInterval(checkInterval);
                     if (data.status === 'timeout') {
-                        document.getElementById('expired-section').innerHTML = '<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Currently no users are here</h2><p>Please search after 15 minutes.</p></div>';
-                        setTimeout(() => {
-                            window.location.href = "{% url 'dashboard' %}";
-                        }, 5000);
+                        document.getElementById('expired-section').innerHTML = '<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Currently no users are here</h2><p>Please search after 15 minutes.</p><a href="{% url \'dashboard\' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>';
                     } else if (data.status === 'expired' && data.error) {
                         document.getElementById('expired-section').innerHTML = `<div class="alert alert-danger" style="margin-top: 2rem;"><h2>Meeting Ended</h2><p>${data.error}</p><a href="{% url 'dashboard' %}" class="btn btn-outline" style="margin-top: 1rem; color: white; border-color: white;">Go Back to Dashboard</a></div>`;
                     }
@@ -218,43 +221,20 @@
                     }
                 }
 
-                if (data.both_done) {
-                    document.getElementById('done-script-btn').style.display = 'none';
-                    document.getElementById('script-section').style.display = 'none';
-                    document.getElementById('single-done-msg').style.display = 'none';
-                    document.getElementById('both-done-msg').style.display = 'block';
-                }
-
-                // Check if script changed dynamically
+                // Check if script changed dynamically (i.e., BOTH users finished last script)
                 if (data.topic_id && data.topic_id !== currentTopicId) {
                     currentTopicId = data.topic_id;
-                    const scriptBox = document.getElementById('script-section');
-                    const scriptHeader = document.getElementById('script-header');
+                    
+                    window.pendingScriptHtml = data.script_html;
+                    window.pendingScriptNumber = data.script_number;
 
-                    if (scriptBox.style.display === 'block') {
-                        scriptBox.innerHTML = data.script_html;
-
-                        if (data.script_number) {
-                            document.getElementById('script-title').innerText = `Script ${data.script_number}`;
-
-                            // Trigger blink for 10 seconds, but keep it permanently visible
-                            scriptHeader.style.display = 'block';
-                            scriptHeader.classList.add('blinking-warning');
-                            scriptHeader.style.background = ''; // Use CSS default from blinking-warning
-                            scriptHeader.style.border = '';
-                            scriptHeader.style.color = '';
-
-                            setTimeout(() => {
-                                scriptHeader.classList.remove('blinking-warning');
-                                // Keep it visible but style it nicely as a normal header
-                                scriptHeader.style.background = 'var(--surface-color)';
-                                scriptHeader.style.border = '1px solid var(--primary)';
-                                scriptHeader.style.color = 'var(--text-main)';
-                                scriptHeader.style.borderRadius = '10px';
-                            }, 10000);
-                        }
-
-                        resetDoneButton();
+                    // Only show next script UI if the user has ALREADY entered the confirmation flow!
+                    if (document.getElementById('confirm-section').style.display !== 'none') {
+                        document.getElementById('done-script-btn').style.display = 'none';
+                        document.getElementById('script-section').style.display = 'none';
+                        document.getElementById('single-done-msg').style.display = 'none';
+                        document.getElementById('both-done-msg').style.display = 'block';
+                        document.getElementById('next-script-btn').style.display = 'inline-block';
                     }
                 }
             })
@@ -262,13 +242,16 @@
     }
 
     if (!isPairedInitially) {
-        checkInterval = setInterval(checkStatus, 3000);
+        checkInterval = setInterval(checkStatus, 4000);
     } else {
         // Even if paired, check periodically to see if partner left
-        checkInterval = setInterval(checkStatus, 5000);
+        checkInterval = setInterval(checkStatus, 6000);
     }
 
     function getScript() {
+        const btn = document.getElementById('get-script-btn');
+        btn.innerText = "Loading Script...";
+        btn.disabled = true;
         fetch(`/api/meeting-status/?meeting_id=${meetingId}`)
             .then(res => res.json())
             .then(data => {
@@ -308,10 +291,16 @@
                     resetDoneButton();
                 } else {
                     alert("Script not available. Please go back and join again.");
+                    const btn = document.getElementById('get-script-btn');
+                    btn.innerText = "Get Script";
+                    btn.disabled = false;
                 }
             })
             .catch(err => {
                 alert("Error fetching script.");
+                const btn = document.getElementById('get-script-btn');
+                btn.innerText = "Get Script";
+                btn.disabled = false;
             });
     }
 
@@ -363,29 +352,35 @@
 
     function nextScript() {
         if (confirm("⚠ WARNING: স্ক্রিপ্ট পরিবর্তন করার আগে দয়া করে রেকর্ডিং টুলের STOP বাটনে ক্লিক করুন এবং uploading শুরু হওয়া পর্যন্ত ১০-১৫ সেকেন্ড অপেক্ষা করুন।\n\nআপনি কি নিশ্চিত যে আপনি স্ক্রিপ্ট পরিবর্তন করতে চান?")) {
-            const formData = new FormData();
-            formData.append('meeting_id', meetingId);
-            formData.append('csrfmiddlewaretoken', '{{ csrf_token }}');
+            
+            document.getElementById('both-done-msg').style.display = 'none';
+            document.getElementById('get-script-btn').style.display = 'none';
+            document.getElementById('confirm-section').style.display = 'block';
+            
+            const scriptBox = document.getElementById('script-section');
+            const scriptHeader = document.getElementById('script-header');
 
-            fetch('/api/next-script/', {
-                method: 'POST',
-                body: formData
-            })
-                .then(res => res.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('confirm-section').style.display = 'none';
-                        document.getElementById('get-script-btn').style.display = 'inline-block';
-                        document.getElementById('script-section').style.display = 'none';
-                        document.getElementById('both-done-msg').style.display = 'none';
-                        checkStatus(); // Force fetch new script immediately rather than waiting for interval
-                    } else if (data.empty_redirect) {
-                        alert(data.error + " Redirecting you back to dashboard...");
-                        window.location.href = "{% url 'dashboard' %}";
-                    } else {
-                        alert("Could not change the script.");
-                    }
-                });
+            scriptBox.innerHTML = window.pendingScriptHtml;
+            scriptBox.style.display = 'block';
+
+            if (window.pendingScriptNumber) {
+                document.getElementById('script-title').innerText = `Script ${window.pendingScriptNumber}`;
+                scriptHeader.style.display = 'block';
+                scriptHeader.classList.add('blinking-warning');
+                scriptHeader.style.background = '';
+                scriptHeader.style.border = '';
+                scriptHeader.style.color = '';
+
+                setTimeout(() => {
+                    scriptHeader.classList.remove('blinking-warning');
+                    scriptHeader.style.background = 'var(--surface-color)';
+                    scriptHeader.style.border = '1px solid var(--primary)';
+                    scriptHeader.style.color = 'var(--text-main)';
+                    scriptHeader.style.borderRadius = '10px';
+                }, 10000);
+            }
+
+            resetDoneButton();
         }
     }
 
